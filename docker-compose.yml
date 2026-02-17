@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: geohealth
+      POSTGRES_PASSWORD: geohealth
+      POSTGRES_DB: geohealth
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geohealth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://geohealth:geohealth@db:5432/geohealth
+      DATABASE_URL_SYNC: postgresql://geohealth:geohealth@db:5432/geohealth
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
