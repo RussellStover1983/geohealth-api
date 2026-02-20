@@ -22,6 +22,7 @@ etl = [
     "shapely>=2.0,<3",
     "fiona>=1.9,<2",
     "psycopg2-binary>=2.9,<3",
+    "pandas>=2.0,<3",
 ]
 dev = [
     "pytest>=8,<9",
@@ -31,7 +32,7 @@ dev = [
 
 [build-system]
 requires = ["setuptools>=68"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

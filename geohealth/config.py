@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     )
     nominatim_url: str = "https://nominatim.openstreetmap.org/search"
     cors_origins: str = "*"
+    census_api_key: str = ""
+    socrata_app_token: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
