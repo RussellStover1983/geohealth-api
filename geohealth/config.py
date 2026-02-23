@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-20250514"
     narrative_max_tokens: int = 1024
+    cache_maxsize: int = 4096
+    cache_ttl: int = 3600
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

@@ -2,7 +2,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from geohealth.services.cache import context_cache
 from geohealth.services.geocoder import GeocodedLocation
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    """Clear the context cache before each test to prevent cross-test leakage."""
+    context_cache.clear()
+    yield
+    context_cache.clear()
 
 
 MOCK_LOCATION = GeocodedLocation(
@@ -140,3 +149,28 @@ async def test_narrative_failure_returns_null(client):
 
     assert resp.status_code == 200
     assert resp.json()["narrative"] is None
+
+
+@pytest.mark.asyncio
+async def test_second_request_uses_cache(client):
+    """Second identical request should use cache — lookup_tract called only once."""
+    with (
+        patch("geohealth.api.routes.context.geocode", new_callable=AsyncMock) as mock_geo,
+        patch("geohealth.api.routes.context.lookup_tract", new_callable=AsyncMock) as mock_tract,
+    ):
+        mock_geo.return_value = MOCK_LOCATION
+        mock_tract.return_value = _make_mock_tract()
+
+        resp1 = await client.get(
+            "/v1/context", params={"address": "1234 Main St", "narrative": "false"}
+        )
+        resp2 = await client.get(
+            "/v1/context", params={"address": "1234 Main St", "narrative": "false"}
+        )
+
+    assert resp1.status_code == 200
+    assert resp2.status_code == 200
+    # lookup_tract should only be called once — second request hits cache
+    mock_tract.assert_called_once()
+    # Both responses should have the same tract data
+    assert resp1.json()["tract"]["geoid"] == resp2.json()["tract"]["geoid"]
