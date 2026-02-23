@@ -14,6 +14,7 @@ dependencies = [
     "pydantic>=2.6,<3",
     "pydantic-settings>=2.2,<3",
     "httpx>=0.27,<1",
+    "anthropic>=0.39,<1",
 ]
 
 [project.optional-dependencies]

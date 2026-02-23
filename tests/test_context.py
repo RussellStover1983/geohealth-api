@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -13,6 +13,26 @@ MOCK_LOCATION = GeocodedLocation(
     county_fips="053",
     tract_fips="001100",
 )
+
+
+def _make_mock_tract():
+    """Return a mock tract ORM object with realistic data."""
+    tract = MagicMock()
+    tract.geoid = "27053001100"
+    tract.state_fips = "27"
+    tract.county_fips = "053"
+    tract.tract_code = "001100"
+    tract.name = "Census Tract 11"
+    tract.total_population = 4500
+    tract.median_household_income = 52000
+    tract.poverty_rate = 18.5
+    tract.uninsured_rate = 12.3
+    tract.unemployment_rate = 7.1
+    tract.median_age = 34.2
+    tract.svi_themes = {"socioeconomic_status": 0.78}
+    tract.places_measures = {"diabetes": 12.1}
+    tract.sdoh_index = 0.72
+    return tract
 
 
 @pytest.mark.asyncio
@@ -59,3 +79,64 @@ async def test_context_with_lat_lng(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["location"]["lat"] == pytest.approx(44.9778)
+
+
+@pytest.mark.asyncio
+async def test_default_narrative_is_null(client):
+    """Without ?narrative=true, narrative should be null."""
+    with (
+        patch("geohealth.api.routes.context.geocode", new_callable=AsyncMock) as mock_geo,
+        patch("geohealth.api.routes.context.lookup_tract", new_callable=AsyncMock) as mock_tract,
+    ):
+        mock_geo.return_value = MOCK_LOCATION
+        mock_tract.return_value = _make_mock_tract()
+
+        resp = await client.get("/v1/context", params={"address": "1234 Main St"})
+
+    assert resp.status_code == 200
+    assert resp.json()["narrative"] is None
+
+
+@pytest.mark.asyncio
+async def test_narrative_true_calls_narrator(client):
+    """?narrative=true should call generate_narrative and return the result."""
+    with (
+        patch("geohealth.api.routes.context.geocode", new_callable=AsyncMock) as mock_geo,
+        patch("geohealth.api.routes.context.lookup_tract", new_callable=AsyncMock) as mock_tract,
+        patch(
+            "geohealth.api.routes.context.generate_narrative", new_callable=AsyncMock
+        ) as mock_narr,
+    ):
+        mock_geo.return_value = MOCK_LOCATION
+        mock_tract.return_value = _make_mock_tract()
+        mock_narr.return_value = "This is a generated narrative."
+
+        resp = await client.get(
+            "/v1/context", params={"address": "1234 Main St", "narrative": "true"}
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["narrative"] == "This is a generated narrative."
+    mock_narr.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_narrative_failure_returns_null(client):
+    """If the narrator fails, response should still be 200 with narrative: null."""
+    with (
+        patch("geohealth.api.routes.context.geocode", new_callable=AsyncMock) as mock_geo,
+        patch("geohealth.api.routes.context.lookup_tract", new_callable=AsyncMock) as mock_tract,
+        patch(
+            "geohealth.api.routes.context.generate_narrative", new_callable=AsyncMock
+        ) as mock_narr,
+    ):
+        mock_geo.return_value = MOCK_LOCATION
+        mock_tract.return_value = _make_mock_tract()
+        mock_narr.return_value = None  # narrator failure
+
+        resp = await client.get(
+            "/v1/context", params={"address": "1234 Main St", "narrative": "true"}
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["narrative"] is None

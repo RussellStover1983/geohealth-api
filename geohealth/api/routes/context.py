@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from geohealth.api.dependencies import get_db
 from geohealth.services.geocoder import GeocodedLocation, geocode
+from geohealth.services.narrator import generate_narrative
 from geohealth.services.tract_lookup import lookup_tract
 
 router = APIRouter(prefix="/v1", tags=["context"])
@@ -15,6 +16,7 @@ async def get_context(
     address: str | None = Query(None, description="Street address to geocode"),
     lat: float | None = Query(None, description="Latitude (if no address)"),
     lng: float | None = Query(None, description="Longitude (if no address)"),
+    narrative: bool = Query(False, description="Generate LLM narrative summary"),
     format: str = Query("json", description="Response format"),
     context: str = Query("full", description="Context sections to include"),
     session: AsyncSession = Depends(get_db),
@@ -71,6 +73,11 @@ async def get_context(
             "tract_code": location.tract_fips,
         }
 
+    # --- narrative generation (opt-in) ----------------------------------------
+    narrative_text = None
+    if narrative and tract_data:
+        narrative_text = await generate_narrative(tract_data)
+
     return {
         "location": {
             "lat": location.lat,
@@ -78,9 +85,6 @@ async def get_context(
             "matched_address": location.matched_address,
         },
         "tract": tract_data,
-        "narrative": (
-            "Narrative generation is not yet available. "
-            "Full health-context narratives will be added in Phase 3."
-        ),
+        "narrative": narrative_text,
         "data": tract_data,
     }

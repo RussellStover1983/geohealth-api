@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
     census_api_key: str = ""
     socrata_app_token: str = ""
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-20250514"
+    narrative_max_tokens: int = 1024
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
