@@ -23,9 +23,9 @@ router = APIRouter(prefix="/v1", tags=["context"])
 )
 async def get_context(
     response: Response,
-    address: str | None = Query(None, description="Street address to geocode"),
-    lat: float | None = Query(None, description="Latitude (if no address)"),
-    lng: float | None = Query(None, description="Longitude (if no address)"),
+    address: str | None = Query(None, max_length=500, description="Street address to geocode"),
+    lat: float | None = Query(None, ge=-90, le=90, description="Latitude (if no address)"),
+    lng: float | None = Query(None, ge=-180, le=180, description="Longitude (if no address)"),
     narrative: bool = Query(False, description="Generate LLM narrative summary"),
     format: str = Query("json", description="Response format"),
     context: str = Query("full", description="Context sections to include"),

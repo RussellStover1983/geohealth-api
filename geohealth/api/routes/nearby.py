@@ -26,8 +26,8 @@ MILES_TO_METERS = 1609.344
 )
 async def get_nearby(
     response: Response,
-    lat: float = Query(..., description="Latitude of center point"),
-    lng: float = Query(..., description="Longitude of center point"),
+    lat: float = Query(..., ge=-90, le=90, description="Latitude of center point"),
+    lng: float = Query(..., ge=-180, le=180, description="Longitude of center point"),
     radius: float = Query(5.0, gt=0, le=50, description="Radius in miles (max 50)"),
     limit: int = Query(25, gt=0, le=100, description="Max results (max 100)"),
     offset: int = Query(0, ge=0, description="Number of rows to skip"),
