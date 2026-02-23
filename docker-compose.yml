@@ -2,15 +2,15 @@ services:
   db:
     image: postgis/postgis:16-3.4
     environment:
-      POSTGRES_USER: geohealth
-      POSTGRES_PASSWORD: geohealth
-      POSTGRES_DB: geohealth
+      POSTGRES_USER: ${DB_USER:-geohealth}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-geohealth}
+      POSTGRES_DB: ${DB_NAME:-geohealth}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U geohealth"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-geohealth}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -20,8 +20,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://geohealth:geohealth@db:5432/geohealth
-      DATABASE_URL_SYNC: postgresql://geohealth:geohealth@db:5432/geohealth
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-geohealth}:${DB_PASSWORD:-geohealth}@db:5432/${DB_NAME:-geohealth}
+      DATABASE_URL_SYNC: postgresql://${DB_USER:-geohealth}:${DB_PASSWORD:-geohealth}@db:5432/${DB_NAME:-geohealth}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       API_KEYS: ${API_KEYS:-}
