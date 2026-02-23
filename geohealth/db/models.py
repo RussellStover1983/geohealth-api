@@ -1,5 +1,5 @@
 from geoalchemy2 import Geometry
-from sqlalchemy import Column, Float, Integer, String, Text
+from sqlalchemy import Column, Float, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase
 
@@ -10,6 +10,9 @@ class Base(DeclarativeBase):
 
 class TractProfile(Base):
     __tablename__ = "tract_profiles"
+    __table_args__ = (
+        Index("ix_tract_profiles_geom", "geom", postgresql_using="gist"),
+    )
 
     geoid = Column(String(11), primary_key=True, comment="Full FIPS: state(2)+county(3)+tract(6)")
     state_fips = Column(String(2), nullable=False, index=True)

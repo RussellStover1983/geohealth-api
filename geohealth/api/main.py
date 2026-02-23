@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from geohealth.api.routes.context import router as context_router
+from geohealth.api.routes.stats import router as stats_router
 from geohealth.config import settings
 from geohealth.db.models import Base
 from geohealth.db.session import engine
@@ -36,6 +37,7 @@ app.add_middleware(
 )
 
 app.include_router(context_router)
+app.include_router(stats_router)
 
 
 @app.get("/health", tags=["system"])

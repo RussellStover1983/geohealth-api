@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from geohealth.api.dependencies import get_db
+from geohealth.services.cache import context_cache, make_cache_key
 from geohealth.services.geocoder import GeocodedLocation, geocode
 from geohealth.services.narrator import generate_narrative
 from geohealth.services.tract_lookup import lookup_tract
@@ -36,42 +37,51 @@ async def get_context(
             detail="Provide either 'address' or both 'lat' and 'lng'.",
         )
 
-    # --- tract lookup --------------------------------------------------------
-    tract = await lookup_tract(
-        location.lat,
-        location.lng,
-        session,
-        state_fips=location.state_fips,
-        county_fips=location.county_fips,
-        tract_fips=location.tract_fips,
-    )
+    # --- cache check ---------------------------------------------------------
+    cache_key = make_cache_key(location.lat, location.lng)
+    cached = context_cache.get(cache_key)
+    if cached is not None:
+        tract_data = cached
+    else:
+        # --- tract lookup ----------------------------------------------------
+        tract = await lookup_tract(
+            location.lat,
+            location.lng,
+            session,
+            state_fips=location.state_fips,
+            county_fips=location.county_fips,
+            tract_fips=location.tract_fips,
+        )
 
-    tract_data = None
-    if tract:
-        tract_data = {
-            "geoid": tract.geoid,
-            "state_fips": tract.state_fips,
-            "county_fips": tract.county_fips,
-            "tract_code": tract.tract_code,
-            "name": tract.name,
-            "total_population": tract.total_population,
-            "median_household_income": tract.median_household_income,
-            "poverty_rate": tract.poverty_rate,
-            "uninsured_rate": tract.uninsured_rate,
-            "unemployment_rate": tract.unemployment_rate,
-            "median_age": tract.median_age,
-            "svi_themes": tract.svi_themes,
-            "places_measures": tract.places_measures,
-            "sdoh_index": tract.sdoh_index,
-        }
-    elif location.state_fips and location.county_fips and location.tract_fips:
-        # No row in DB yet — still return the FIPS from the geocoder
-        tract_data = {
-            "geoid": f"{location.state_fips}{location.county_fips}{location.tract_fips}",
-            "state_fips": location.state_fips,
-            "county_fips": location.county_fips,
-            "tract_code": location.tract_fips,
-        }
+        tract_data = None
+        if tract:
+            tract_data = {
+                "geoid": tract.geoid,
+                "state_fips": tract.state_fips,
+                "county_fips": tract.county_fips,
+                "tract_code": tract.tract_code,
+                "name": tract.name,
+                "total_population": tract.total_population,
+                "median_household_income": tract.median_household_income,
+                "poverty_rate": tract.poverty_rate,
+                "uninsured_rate": tract.uninsured_rate,
+                "unemployment_rate": tract.unemployment_rate,
+                "median_age": tract.median_age,
+                "svi_themes": tract.svi_themes,
+                "places_measures": tract.places_measures,
+                "sdoh_index": tract.sdoh_index,
+            }
+        elif location.state_fips and location.county_fips and location.tract_fips:
+            # No row in DB yet — still return the FIPS from the geocoder
+            tract_data = {
+                "geoid": f"{location.state_fips}{location.county_fips}{location.tract_fips}",
+                "state_fips": location.state_fips,
+                "county_fips": location.county_fips,
+                "tract_code": location.tract_fips,
+            }
+
+        if tract_data is not None:
+            context_cache.set(cache_key, tract_data)
 
     # --- narrative generation (opt-in) ----------------------------------------
     narrative_text = None

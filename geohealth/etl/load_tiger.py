@@ -72,6 +72,13 @@ def load_state(year: int, state_fips: str, engine) -> int:
     row_count = len(gdf)
     logger.info("Inserting %d tracts for state FIPS %s", row_count, state_fips)
 
+    # Delete existing rows for this state to ensure idempotency
+    with engine.begin() as conn:
+        conn.execute(
+            text("DELETE FROM tract_profiles WHERE state_fips = :state"),
+            {"state": state_fips},
+        )
+
     gdf.to_postgis(
         "tract_profiles",
         engine,
