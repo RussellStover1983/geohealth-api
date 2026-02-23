@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -24,9 +24,9 @@ CENSUS_RESPONSE = {
 
 @pytest.mark.asyncio
 async def test_geocode_census_success():
-    mock_resp = AsyncMock()
+    mock_resp = MagicMock()
     mock_resp.json.return_value = CENSUS_RESPONSE
-    mock_resp.raise_for_status = lambda: None
+    mock_resp.raise_for_status = MagicMock()
 
     with patch("geohealth.services.geocoder.httpx.AsyncClient") as MockClient:
         instance = AsyncMock()
@@ -48,11 +48,11 @@ async def test_geocode_census_success():
 @pytest.mark.asyncio
 async def test_geocode_falls_back_to_nominatim():
     """When Census geocoder raises, Nominatim is tried."""
-    nominatim_response = AsyncMock()
+    nominatim_response = MagicMock()
     nominatim_response.json.return_value = [
         {"lat": "44.9778", "lon": "-93.2650", "display_name": "Minneapolis, MN"}
     ]
-    nominatim_response.raise_for_status = lambda: None
+    nominatim_response.raise_for_status = MagicMock()
 
     call_count = 0
 
