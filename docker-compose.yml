@@ -22,6 +22,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://geohealth:geohealth@db:5432/geohealth
       DATABASE_URL_SYNC: postgresql://geohealth:geohealth@db:5432/geohealth
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
