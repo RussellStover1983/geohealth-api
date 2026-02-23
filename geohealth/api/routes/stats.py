@@ -1,20 +1,27 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from geohealth.api.auth import require_api_key
 from geohealth.api.dependencies import get_db
+from geohealth.api.schemas import ErrorResponse, StatsResponse
 from geohealth.db.models import TractProfile
 from geohealth.services.rate_limiter import rate_limiter
 
 router = APIRouter(prefix="/v1", tags=["stats"])
 
 
-@router.get("/stats")
+@router.get(
+    "/stats",
+    response_model=StatsResponse,
+    responses={429: {"model": ErrorResponse}},
+)
 async def get_stats(
     response: Response,
+    offset: int = Query(0, ge=0, description="Number of state rows to skip"),
+    limit: int = Query(50, gt=0, le=200, description="Max state rows to return"),
     session: AsyncSession = Depends(get_db),
     api_key: str = Depends(require_api_key),
 ):
@@ -38,10 +45,15 @@ async def get_stats(
     result = await session.execute(stmt)
     rows = result.all()
 
-    states = [{"state_fips": r.state_fips, "tract_count": r.tract_count} for r in rows]
+    all_states = [{"state_fips": r.state_fips, "tract_count": r.tract_count} for r in rows]
+
+    # Pagination (applied in Python — dataset is bounded at ~56 states/territories)
+    paginated = all_states[offset : offset + limit]
 
     return {
-        "total_states": len(states),
-        "total_tracts": sum(s["tract_count"] for s in states),
-        "states": states,
+        "total_states": len(all_states),
+        "total_tracts": sum(s["tract_count"] for s in all_states),
+        "offset": offset,
+        "limit": limit,
+        "states": paginated,
     }

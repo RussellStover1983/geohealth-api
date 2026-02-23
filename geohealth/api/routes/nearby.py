@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from geoalchemy2.functions import ST_Distance, ST_DWithin, ST_Point, ST_SetSRID
-from sqlalchemy import cast, select
+from sqlalchemy import cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from geoalchemy2 import Geography
 
 from geohealth.api.auth import require_api_key
 from geohealth.api.dependencies import get_db
+from geohealth.api.schemas import ErrorResponse, NearbyResponse
 from geohealth.db.models import TractProfile
 from geohealth.services.rate_limiter import rate_limiter
 
@@ -18,13 +19,18 @@ router = APIRouter(prefix="/v1", tags=["nearby"])
 MILES_TO_METERS = 1609.344
 
 
-@router.get("/nearby")
+@router.get(
+    "/nearby",
+    response_model=NearbyResponse,
+    responses={429: {"model": ErrorResponse}},
+)
 async def get_nearby(
     response: Response,
     lat: float = Query(..., description="Latitude of center point"),
     lng: float = Query(..., description="Longitude of center point"),
     radius: float = Query(5.0, gt=0, le=50, description="Radius in miles (max 50)"),
     limit: int = Query(25, gt=0, le=100, description="Max results (max 100)"),
+    offset: int = Query(0, ge=0, description="Number of rows to skip"),
     session: AsyncSession = Depends(get_db),
     api_key: str = Depends(require_api_key),
 ):
@@ -45,11 +51,22 @@ async def get_nearby(
 
     distance_col = ST_Distance(geog_geom, geog_point).label("distance_m")
 
+    # Count total matching tracts (before pagination)
+    count_stmt = (
+        select(func.count())
+        .select_from(TractProfile)
+        .where(TractProfile.geom.isnot(None))
+        .where(ST_DWithin(geog_geom, geog_point, radius_meters))
+    )
+    count_result = await session.execute(count_stmt)
+    total = count_result.scalar_one()
+
     stmt = (
         select(TractProfile, distance_col)
         .where(TractProfile.geom.isnot(None))
         .where(ST_DWithin(geog_geom, geog_point, radius_meters))
         .order_by(distance_col)
+        .offset(offset)
         .limit(limit)
     )
 
@@ -75,5 +92,8 @@ async def get_nearby(
         "center": {"lat": lat, "lng": lng},
         "radius_miles": radius,
         "count": len(tracts),
+        "total": total,
+        "offset": offset,
+        "limit": limit,
         "tracts": tracts,
     }

@@ -33,11 +33,20 @@ def _mock_db_override():
 @pytest.mark.asyncio
 async def test_health_needs_no_auth(client):
     """The /health endpoint should be accessible without any API key."""
-    with patch("geohealth.config.settings.auth_enabled", True), \
-         patch("geohealth.config.settings.api_keys", "test-key"):
-        resp = await client.get("/health")
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = MagicMock()
+
+    app.dependency_overrides[get_db] = lambda: mock_session
+    try:
+        with patch("geohealth.config.settings.auth_enabled", True), \
+             patch("geohealth.config.settings.api_keys", "test-key"):
+            resp = await client.get("/health")
+    finally:
+        app.dependency_overrides.clear()
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["database"] == "connected"
 
 
 @pytest.mark.asyncio
@@ -191,3 +200,68 @@ async def test_rate_limit_returns_429(client):
     finally:
         rate_limiter._max_requests = 60
         app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Key hashing tests
+# ---------------------------------------------------------------------------
+
+
+class TestKeyHashing:
+    def test_hash_key_deterministic(self):
+        from geohealth.api.auth import _hash_key
+
+        h1 = _hash_key("my-secret")
+        h2 = _hash_key("my-secret")
+        assert h1 == h2
+        assert len(h1) == 64
+
+    def test_plaintext_key_is_hashed(self):
+        """Plaintext keys in API_KEYS are hashed for comparison."""
+        from geohealth.api.auth import _hash_key, _valid_key_hashes
+
+        with patch("geohealth.config.settings.api_keys", "plain-key"):
+            hashes = _valid_key_hashes()
+        assert _hash_key("plain-key") in hashes
+
+    def test_prehashed_key_used_directly(self):
+        """A 64-char hex string in API_KEYS is treated as pre-hashed."""
+        from geohealth.api.auth import _hash_key, _valid_key_hashes
+
+        pre_hashed = _hash_key("my-secret")
+        with patch("geohealth.config.settings.api_keys", pre_hashed):
+            hashes = _valid_key_hashes()
+        assert pre_hashed in hashes
+
+    @pytest.mark.asyncio
+    async def test_auth_works_with_hashed_key_env(self, client):
+        """Auth succeeds when API_KEYS contains the SHA-256 hash of the submitted key."""
+        from geohealth.api.auth import _hash_key
+
+        pre_hashed = _hash_key("valid-key")
+        with patch("geohealth.config.settings.auth_enabled", True), \
+             patch("geohealth.config.settings.api_keys", pre_hashed), \
+             patch("geohealth.api.routes.context.geocode", new_callable=AsyncMock) as mock_geo, \
+             patch("geohealth.api.routes.context.lookup_tract", new_callable=AsyncMock) as mock_tract:
+            mock_geo.return_value = MagicMock(
+                lat=44.0, lng=-93.0, matched_address="test",
+                state_fips="27", county_fips="053", tract_fips="001100",
+            )
+            mock_tract.return_value = None
+            resp = await client.get(
+                "/v1/context",
+                params={"address": "test"},
+                headers={"X-API-Key": "valid-key"},
+            )
+        assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_require_api_key_returns_hash(self):
+        """require_api_key should return the hashed key, not the plaintext."""
+        from geohealth.api.auth import _hash_key, require_api_key
+
+        with patch("geohealth.config.settings.auth_enabled", True), \
+             patch("geohealth.config.settings.api_keys", "valid-key"):
+            result = await require_api_key(api_key="valid-key")
+        assert result == _hash_key("valid-key")
+        assert result != "valid-key"

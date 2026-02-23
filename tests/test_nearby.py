@@ -9,11 +9,27 @@ import pytest
 from geohealth.services.rate_limiter import rate_limiter
 
 
-def _mock_db_result(rows):
+def _mock_db_result(rows, total=None):
     """Build a mock async session that returns the given (tract, distance_m) rows."""
     mock_result = MagicMock()
     mock_result.all.return_value = rows
     return mock_result
+
+
+def _mock_session_with_count(rows, total=None):
+    """Build a mock async session that handles both count and data queries."""
+    if total is None:
+        total = len(rows)
+
+    mock_count_result = MagicMock()
+    mock_count_result.scalar_one.return_value = total
+
+    mock_data_result = MagicMock()
+    mock_data_result.all.return_value = rows
+
+    mock_session = AsyncMock()
+    mock_session.execute.side_effect = [mock_count_result, mock_data_result]
+    return mock_session
 
 
 def _make_nearby_tract(geoid="27053001100", name="Census Tract 11", distance_m=500.0):
@@ -67,24 +83,25 @@ async def test_nearby_returns_sorted_tracts(client):
         _make_nearby_tract("27053001300", "Tract C", 5000.0),
     ]
 
-    mock_session = AsyncMock()
-    mock_session.execute.return_value = _mock_db_result(rows)
+    mock_session = _mock_session_with_count(rows)
 
-    with patch("geohealth.api.routes.nearby.get_db", return_value=mock_session):
-        from geohealth.api.dependencies import get_db
-        from geohealth.api.main import app
+    from geohealth.api.dependencies import get_db
+    from geohealth.api.main import app
 
-        app.dependency_overrides[get_db] = lambda: mock_session
-        try:
-            resp = await client.get("/v1/nearby", params={"lat": 44.97, "lng": -93.26})
-        finally:
-            app.dependency_overrides.clear()
+    app.dependency_overrides[get_db] = lambda: mock_session
+    try:
+        resp = await client.get("/v1/nearby", params={"lat": 44.97, "lng": -93.26})
+    finally:
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["count"] == 3
+    assert body["total"] == 3
     assert body["center"] == {"lat": 44.97, "lng": -93.26}
     assert body["radius_miles"] == 5.0
+    assert body["offset"] == 0
+    assert body["limit"] == 25
     # Verify sorted by distance
     distances = [t["distance_miles"] for t in body["tracts"]]
     assert distances == sorted(distances)
@@ -93,8 +110,7 @@ async def test_nearby_returns_sorted_tracts(client):
 @pytest.mark.asyncio
 async def test_nearby_empty_result(client):
     """No tracts found → empty list, count 0."""
-    mock_session = AsyncMock()
-    mock_session.execute.return_value = _mock_db_result([])
+    mock_session = _mock_session_with_count([])
 
     from geohealth.api.dependencies import get_db
     from geohealth.api.main import app
@@ -108,6 +124,7 @@ async def test_nearby_empty_result(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["count"] == 0
+    assert body["total"] == 0
     assert body["tracts"] == []
 
 
@@ -116,8 +133,7 @@ async def test_nearby_custom_limit(client):
     """Custom limit parameter is accepted."""
     rows = [_make_nearby_tract("27053001100", "Tract A", 500.0)]
 
-    mock_session = AsyncMock()
-    mock_session.execute.return_value = _mock_db_result(rows)
+    mock_session = _mock_session_with_count(rows)
 
     from geohealth.api.dependencies import get_db
     from geohealth.api.main import app
@@ -137,8 +153,7 @@ async def test_nearby_rate_limit(client):
     """Exceeding rate limit → 429."""
     rate_limiter._max_requests = 1
     try:
-        mock_session = AsyncMock()
-        mock_session.execute.return_value = _mock_db_result([])
+        mock_session = _mock_session_with_count([])
 
         from geohealth.api.dependencies import get_db
         from geohealth.api.main import app
@@ -155,3 +170,31 @@ async def test_nearby_rate_limit(client):
         assert resp.status_code == 429
     finally:
         rate_limiter._max_requests = 60
+
+
+@pytest.mark.asyncio
+async def test_nearby_offset(client):
+    """Offset parameter skips rows and total reflects full count."""
+    rows = [_make_nearby_tract("27053001200", "Tract B", 2000.0)]
+
+    # Total is 3 but only 1 returned after offset
+    mock_session = _mock_session_with_count(rows, total=3)
+
+    from geohealth.api.dependencies import get_db
+    from geohealth.api.main import app
+
+    app.dependency_overrides[get_db] = lambda: mock_session
+    try:
+        resp = await client.get(
+            "/v1/nearby",
+            params={"lat": 44.97, "lng": -93.26, "offset": 2, "limit": 5},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 3
+    assert body["offset"] == 2
+    assert body["limit"] == 5
+    assert body["count"] == 1
