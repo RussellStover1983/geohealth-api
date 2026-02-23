@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from geohealth.api.auth import require_api_key
 from geohealth.api.dependencies import get_db
 from geohealth.services.cache import context_cache, make_cache_key
 from geohealth.services.geocoder import GeocodedLocation, geocode
 from geohealth.services.narrator import generate_narrative
+from geohealth.services.rate_limiter import rate_limiter
 from geohealth.services.tract_lookup import lookup_tract
 
 router = APIRouter(prefix="/v1", tags=["context"])
@@ -14,6 +16,7 @@ router = APIRouter(prefix="/v1", tags=["context"])
 
 @router.get("/context")
 async def get_context(
+    response: Response,
     address: str | None = Query(None, description="Street address to geocode"),
     lat: float | None = Query(None, description="Latitude (if no address)"),
     lng: float | None = Query(None, description="Longitude (if no address)"),
@@ -21,8 +24,16 @@ async def get_context(
     format: str = Query("json", description="Response format"),
     context: str = Query("full", description="Context sections to include"),
     session: AsyncSession = Depends(get_db),
+    api_key: str = Depends(require_api_key),
 ):
     """Return geographic health context for a location."""
+
+    # --- rate limit ----------------------------------------------------------
+    allowed, rl_headers = rate_limiter.is_allowed(api_key)
+    for hdr, val in rl_headers.items():
+        response.headers[hdr] = val
+    if not allowed:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded", headers=rl_headers)
 
     # --- resolve location ---------------------------------------------------
     if address:
