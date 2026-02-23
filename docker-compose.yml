@@ -23,6 +23,10 @@ services:
       DATABASE_URL: postgresql+asyncpg://geohealth:geohealth@db:5432/geohealth
       DATABASE_URL_SYNC: postgresql://geohealth:geohealth@db:5432/geohealth
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      API_KEYS: ${API_KEYS:-}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-60}
     depends_on:
       db:
         condition: service_healthy

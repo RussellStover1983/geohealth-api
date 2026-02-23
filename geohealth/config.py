@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     narrative_max_tokens: int = 1024
     cache_maxsize: int = 4096
     cache_ttl: int = 3600
+    auth_enabled: bool = False
+    api_keys: str = ""
+    rate_limit_per_minute: int = 60
+    rate_limit_window: int = 60
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
