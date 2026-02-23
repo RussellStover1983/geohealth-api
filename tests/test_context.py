@@ -2,6 +2,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from geohealth.api.dependencies import get_db
+from geohealth.api.main import app
 from geohealth.services.cache import context_cache
 from geohealth.services.geocoder import GeocodedLocation
 
@@ -46,9 +48,20 @@ def _make_mock_tract():
 
 @pytest.mark.asyncio
 async def test_health(client):
-    resp = await client.get("/health")
+    mock_result = MagicMock()
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_result
+
+    app.dependency_overrides[get_db] = lambda: mock_session
+    try:
+        resp = await client.get("/health")
+    finally:
+        app.dependency_overrides.clear()
+
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["database"] == "connected"
 
 
 @pytest.mark.asyncio

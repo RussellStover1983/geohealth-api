@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from geohealth.api.auth import require_api_key
 from geohealth.api.dependencies import get_db
+from geohealth.api.schemas import ContextResponse, ErrorResponse
 from geohealth.services.cache import context_cache, make_cache_key
 from geohealth.services.geocoder import GeocodedLocation, geocode
 from geohealth.services.narrator import generate_narrative
@@ -15,7 +16,11 @@ from geohealth.services.tract_serializer import fips_fallback_dict, tract_to_dic
 router = APIRouter(prefix="/v1", tags=["context"])
 
 
-@router.get("/context")
+@router.get(
+    "/context",
+    response_model=ContextResponse,
+    responses={429: {"model": ErrorResponse}},
+)
 async def get_context(
     response: Response,
     address: str | None = Query(None, description="Street address to geocode"),

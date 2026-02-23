@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from geohealth.api.auth import require_api_key
 from geohealth.api.dependencies import get_db
+from geohealth.api.schemas import CompareResponse, ErrorResponse
 from geohealth.db.models import TractProfile
 from geohealth.services.rate_limiter import rate_limiter
 
@@ -39,7 +40,11 @@ def _compute_differences(a_vals: dict, b_vals: dict) -> dict:
     return diffs
 
 
-@router.get("/compare")
+@router.get(
+    "/compare",
+    response_model=CompareResponse,
+    responses={429: {"model": ErrorResponse}},
+)
 async def get_compare(
     response: Response,
     geoid1: str = Query(..., min_length=11, max_length=11, description="First tract GEOID (11 chars)"),

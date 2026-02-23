@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from geohealth.api.auth import require_api_key
 from geohealth.api.dependencies import get_db
+from geohealth.api.schemas import BatchResponse, ErrorResponse
 from geohealth.config import settings
 from geohealth.services.cache import context_cache, make_cache_key
 from geohealth.services.geocoder import geocode
@@ -24,7 +25,11 @@ class BatchRequest(BaseModel):
     addresses: list[str] = Field(..., min_length=1, max_length=100)
 
 
-@router.post("/batch")
+@router.post(
+    "/batch",
+    response_model=BatchResponse,
+    responses={429: {"model": ErrorResponse}},
+)
 async def post_batch(
     body: BatchRequest,
     response: Response,
