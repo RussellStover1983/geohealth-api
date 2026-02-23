@@ -3,7 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from geohealth.api.routes.batch import router as batch_router
+from geohealth.api.routes.compare import router as compare_router
 from geohealth.api.routes.context import router as context_router
+from geohealth.api.routes.nearby import router as nearby_router
 from geohealth.api.routes.stats import router as stats_router
 from geohealth.config import settings
 from geohealth.db.models import Base
@@ -38,6 +41,9 @@ app.add_middleware(
 
 app.include_router(context_router)
 app.include_router(stats_router)
+app.include_router(batch_router)
+app.include_router(nearby_router)
+app.include_router(compare_router)
 
 
 @app.get("/health", tags=["system"])

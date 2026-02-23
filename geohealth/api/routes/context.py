@@ -10,6 +10,7 @@ from geohealth.services.geocoder import GeocodedLocation, geocode
 from geohealth.services.narrator import generate_narrative
 from geohealth.services.rate_limiter import rate_limiter
 from geohealth.services.tract_lookup import lookup_tract
+from geohealth.services.tract_serializer import fips_fallback_dict, tract_to_dict
 
 router = APIRouter(prefix="/v1", tags=["context"])
 
@@ -66,30 +67,9 @@ async def get_context(
 
         tract_data = None
         if tract:
-            tract_data = {
-                "geoid": tract.geoid,
-                "state_fips": tract.state_fips,
-                "county_fips": tract.county_fips,
-                "tract_code": tract.tract_code,
-                "name": tract.name,
-                "total_population": tract.total_population,
-                "median_household_income": tract.median_household_income,
-                "poverty_rate": tract.poverty_rate,
-                "uninsured_rate": tract.uninsured_rate,
-                "unemployment_rate": tract.unemployment_rate,
-                "median_age": tract.median_age,
-                "svi_themes": tract.svi_themes,
-                "places_measures": tract.places_measures,
-                "sdoh_index": tract.sdoh_index,
-            }
-        elif location.state_fips and location.county_fips and location.tract_fips:
-            # No row in DB yet — still return the FIPS from the geocoder
-            tract_data = {
-                "geoid": f"{location.state_fips}{location.county_fips}{location.tract_fips}",
-                "state_fips": location.state_fips,
-                "county_fips": location.county_fips,
-                "tract_code": location.tract_fips,
-            }
+            tract_data = tract_to_dict(tract)
+        else:
+            tract_data = fips_fallback_dict(location)
 
         if tract_data is not None:
             context_cache.set(cache_key, tract_data)
