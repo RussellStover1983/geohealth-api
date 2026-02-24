@@ -5,6 +5,7 @@ import logging
 import anthropic
 
 from geohealth.config import settings
+from geohealth.services.metrics import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +70,12 @@ async def generate_narrative(tract_data: dict) -> str | None:
     """
     if not settings.anthropic_api_key:
         logger.warning("Narrative requested but ANTHROPIC_API_KEY is not set")
+        metrics.inc_narrative(False)
         return None
 
     user_message = _build_user_message(tract_data)
     if not user_message:
+        metrics.inc_narrative(False)
         return None
 
     try:
@@ -83,16 +86,21 @@ async def generate_narrative(tract_data: dict) -> str | None:
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}],
         )
+        metrics.inc_narrative(True)
         return response.content[0].text
     except anthropic.AuthenticationError:
         logger.error("Anthropic authentication failed — check ANTHROPIC_API_KEY")
+        metrics.inc_narrative(False)
         return None
     except anthropic.RateLimitError:
         logger.warning("Anthropic rate limit exceeded")
+        metrics.inc_narrative(False)
         return None
     except anthropic.APIError as exc:
         logger.error("Anthropic API error: %s", exc)
+        metrics.inc_narrative(False)
         return None
     except Exception as exc:
         logger.exception("Unexpected error generating narrative: %s", exc)
+        metrics.inc_narrative(False)
         return None

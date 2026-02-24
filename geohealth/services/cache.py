@@ -8,6 +8,7 @@ from collections import OrderedDict
 from typing import Any
 
 from geohealth.config import settings
+from geohealth.services.metrics import metrics
 
 
 class TTLCache:
@@ -22,13 +23,16 @@ class TTLCache:
     def get(self, key: str) -> Any | None:
         with self._lock:
             if key not in self._data:
+                metrics.inc_cache_miss()
                 return None
             value, expires_at = self._data[key]
             if time.monotonic() > expires_at:
                 del self._data[key]
+                metrics.inc_cache_miss()
                 return None
             # Refresh LRU position
             self._data.move_to_end(key)
+            metrics.inc_cache_hit()
             return value
 
     def set(self, key: str, value: Any) -> None:

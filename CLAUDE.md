@@ -122,13 +122,25 @@ Each external data source gets its own JSONB column (e.g., `svi_themes`, `places
 
 Existing fixed ACS columns (`poverty_rate`, etc.) stay as-is for backward compatibility. `TractDataModel` has `extra = "allow"` so new JSONB fields flow through the API automatically.
 
+### Observability
+
+**Request correlation**: Every request gets an `X-Request-ID` header (client-sent IDs are echoed; otherwise a UUID is generated). The ID is stored in a `contextvars.ContextVar` and automatically included in all log lines.
+
+**Structured logging** (`logging_config.py`): Two formatters (`JSONFormatter` for log aggregators, `TextFormatter` for humans) selected via `LOG_FORMAT`. Both include the request ID. `setup_logging()` is called once at startup in the lifespan handler.
+
+**Application metrics** (`services/metrics.py`): Thread-safe `MetricsCollector` singleton tracks request counters, status code distribution, cache hit/miss rates, geocoder source success/failure, narrative success/failure, and latency percentiles (p50/p90/p95/p99). Exposed via `GET /metrics`. No external dependencies — uses only stdlib `threading` and `time`.
+
+**Instrumented services**: Cache (`get()` → hit/miss), geocoder (`geocode()` → census/nominatim/failure), narrator (`generate_narrative()` → success/failure).
+
+**Enhanced `/health`**: Returns cache size/hit-rate, rate limiter active keys, and uptime when healthy. Degraded response stays unchanged for backward compatibility.
+
 ## Testing Patterns
 
 Tests use **no live database** — everything is mocked via `unittest.mock` (`AsyncMock`, `MagicMock`, `patch`).
 
 - **pytest-asyncio** with `asyncio_mode = "auto"` — async test functions are auto-detected
 - **`client` fixture** in `conftest.py` — `httpx.AsyncClient` with `ASGITransport(app=app)`
-- **Autouse fixture** clears rate limiter before/after every test
+- **Autouse fixtures** clear rate limiter and reset metrics before/after every test
 - **Dependency override pattern**: `app.dependency_overrides[dep] = mock` in try/finally blocks
 - **Service mocking**: `patch("geohealth.api.routes.context.geocode", new_callable=AsyncMock)`
 - Cache must be cleared between tests that test caching behavior
@@ -143,6 +155,7 @@ Tests use **no live database** — everything is mocked via `unittest.mock` (`As
 | GET | `/v1/nearby` | Yes | Spatial radius search — tracts within N miles |
 | GET | `/v1/compare` | Yes | Compare two tracts or tract vs averages |
 | GET | `/v1/stats` | Yes | Per-state tract counts |
+| GET | `/metrics` | No | Application metrics (counters, latency percentiles, cache stats) |
 
 ## Key Configuration (env vars / .env)
 
@@ -156,6 +169,8 @@ Tests use **no live database** — everything is mocked via `unittest.mock` (`As
 | `ANTHROPIC_API_KEY` | — | For narrative generation |
 | `BATCH_MAX_SIZE` | `50` | Max addresses per batch request |
 | `RUN_MIGRATIONS` | `true` | Set `false` in tests to skip Alembic on startup |
+| `LOG_FORMAT` | `text` | `text` for human-readable, `json` for structured JSON |
+| `LOG_LEVEL` | `INFO` | Standard Python log levels |
 
 ## CI/CD
 
