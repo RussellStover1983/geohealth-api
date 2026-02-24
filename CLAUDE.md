@@ -90,6 +90,15 @@ Alembic manages schema evolution. Migrations live in `geohealth/migrations/versi
 
 For existing databases created by the old `create_all`, run `alembic stamp head` once to mark them as current.
 
+### OpenAPI Documentation
+
+The API is self-documenting via OpenAPI 3.1:
+- **Swagger UI** at `/docs` — interactive endpoint explorer with try-it-out
+- **ReDoc** at `/redoc` — clean reference documentation
+- **OpenAPI JSON** at `/openapi.json` — machine-readable schema
+
+Documentation lives in the code: Pydantic model `Field(description=...)` and `json_schema_extra` examples drive the schema; FastAPI route decorators provide `summary`, `description`, and per-status-code `responses`. The `_DESCRIPTION` and `_OPENAPI_TAGS` constants in `main.py` supply the top-level API description and tag groupings.
+
 ### JSONB Data Source Pattern
 
 Each external data source gets its own JSONB column (e.g., `svi_themes`, `places_measures`). This means:

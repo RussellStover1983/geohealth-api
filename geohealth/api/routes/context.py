@@ -18,8 +18,24 @@ router = APIRouter(prefix="/v1", tags=["context"])
 
 @router.get(
     "/context",
+    summary="Look up health context for a location",
+    description=(
+        "Resolve a street address **or** lat/lng coordinates to the "
+        "surrounding census tract and return demographics, SVI themes, "
+        "CDC PLACES health measures, and an optional AI-generated "
+        "narrative.\n\n"
+        "Supply **either** `address` **or** both `lat` and `lng`. "
+        "When an address is provided it is geocoded via the Census Bureau "
+        "(with Nominatim fallback). Results are cached by coordinates "
+        "rounded to 4 decimal places (~11 m)."
+    ),
     response_model=ContextResponse,
-    responses={429: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse, "description": "Missing or invalid parameters"},
+        401: {"model": ErrorResponse, "description": "Missing API key"},
+        403: {"model": ErrorResponse, "description": "Invalid API key"},
+        429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
+    },
 )
 async def get_context(
     response: Response,

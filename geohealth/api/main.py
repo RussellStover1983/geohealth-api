@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from contextlib import asynccontextmanager
 
@@ -27,6 +29,76 @@ from geohealth.db.session import engine
 
 logger = logging.getLogger("geohealth")
 
+_DESCRIPTION = """\
+Census-tract-level geographic health intelligence API.
+
+Given a street address or lat/lng coordinates, returns **demographics**,
+**CDC/ATSDR Social Vulnerability Index (SVI) themes**,
+**CDC PLACES health outcome measures**, and an optional
+**AI-generated narrative** for the surrounding census tract.
+
+### Data resolution
+
+All data is resolved to the **census tract** level (~4,000 residents per
+tract on average). Coordinates are matched to tracts via PostGIS spatial
+queries or FIPS-code lookups from the Census Bureau geocoder.
+
+### Authentication
+
+Most endpoints require an API key passed via the `X-API-Key` header.
+See the *Authentication* section in the README for details on key
+management and SHA-256 pre-hashing.
+
+### Rate limiting
+
+Requests are rate-limited per API key using a sliding window.
+Every response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
+and `X-RateLimit-Reset` headers.
+"""
+
+_OPENAPI_TAGS = [
+    {
+        "name": "system",
+        "description": "Health checks and operational endpoints.",
+    },
+    {
+        "name": "context",
+        "description": (
+            "Primary lookup — resolve an address or coordinates to "
+            "census tract demographics, SVI themes, PLACES measures, "
+            "and an optional AI narrative."
+        ),
+    },
+    {
+        "name": "batch",
+        "description": (
+            "Batch address lookups — submit multiple addresses in a "
+            "single request and receive per-address results."
+        ),
+    },
+    {
+        "name": "nearby",
+        "description": (
+            "Spatial radius search — find census tracts within a "
+            "given distance of a point, sorted by proximity."
+        ),
+    },
+    {
+        "name": "compare",
+        "description": (
+            "Compare two census tracts side-by-side, or compare a "
+            "tract against state or national averages."
+        ),
+    },
+    {
+        "name": "stats",
+        "description": (
+            "Data loading statistics — view total tracts loaded "
+            "and per-state breakdowns."
+        ),
+    },
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,7 +115,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="GeoHealth Context API",
     version="0.1.0",
-    description="Census-tract-level geographic health intelligence",
+    summary="Census-tract-level geographic health intelligence",
+    description=_DESCRIPTION,
+    openapi_tags=_OPENAPI_TAGS,
+    contact={
+        "name": "GeoHealth API",
+        "url": "https://github.com/RussellStover1983/geohealth-api",
+    },
+    license_info={"name": "MIT", "identifier": "MIT"},
     lifespan=lifespan,
 )
 
@@ -75,8 +154,11 @@ app.include_router(compare_router)
 @app.get(
     "/health",
     tags=["system"],
+    summary="Health check",
+    description="Check API and database connectivity. Returns 200 when "
+    "healthy, 503 when the database is unreachable.",
     response_model=HealthResponse,
-    responses={503: {"model": ErrorResponse}},
+    responses={503: {"model": ErrorResponse, "description": "Database unreachable"}},
 )
 async def health(session: AsyncSession = Depends(get_db)):
     """Check API and database connectivity."""

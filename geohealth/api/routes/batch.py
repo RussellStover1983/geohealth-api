@@ -22,13 +22,32 @@ router = APIRouter(prefix="/v1", tags=["batch"])
 
 
 class BatchRequest(BaseModel):
-    addresses: list[str] = Field(..., min_length=1, max_length=100)
+    addresses: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="List of street addresses to geocode and look up",
+    )
 
 
 @router.post(
     "/batch",
+    summary="Batch address lookup",
+    description=(
+        "Submit multiple street addresses in a single request and receive "
+        "per-address census tract data. Each address is geocoded and looked "
+        "up concurrently. The request counts as **one** rate-limit hit.\n\n"
+        "The maximum number of addresses per request is controlled by the "
+        "`BATCH_MAX_SIZE` setting (default 50)."
+    ),
     response_model=BatchResponse,
-    responses={429: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse, "description": "Too many addresses"},
+        401: {"model": ErrorResponse, "description": "Missing API key"},
+        403: {"model": ErrorResponse, "description": "Invalid API key"},
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
+    },
 )
 async def post_batch(
     body: BatchRequest,

@@ -42,8 +42,22 @@ def _compute_differences(a_vals: dict, b_vals: dict) -> dict:
 
 @router.get(
     "/compare",
+    summary="Compare census tracts",
+    description=(
+        "Compare two census tracts side-by-side, or compare a single tract "
+        "against state or national averages.\n\n"
+        "Provide `geoid1` (required) plus **either** `geoid2` (a second "
+        "tract) **or** `compare_to` (`state` or `national`). The response "
+        "includes both sides' values and the computed differences (A - B)."
+    ),
     response_model=CompareResponse,
-    responses={429: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid parameter combination"},
+        401: {"model": ErrorResponse, "description": "Missing API key"},
+        403: {"model": ErrorResponse, "description": "Invalid API key"},
+        404: {"model": ErrorResponse, "description": "Tract not found"},
+        429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
+    },
 )
 async def get_compare(
     response: Response,
