@@ -80,6 +80,7 @@ Keys can be provided as plaintext or as pre-hashed SHA-256 hex strings. The API 
 | GET | `/v1/nearby` | Yes | Find census tracts within a radius |
 | GET | `/v1/compare` | Yes | Compare two tracts or tract vs. averages |
 | GET | `/v1/stats` | Yes | Per-state data loading statistics |
+| GET | `/metrics` | No | Application metrics (counters, latency, cache stats) |
 
 ## Example Requests
 
@@ -198,6 +199,35 @@ When the limit is exceeded, the API returns `429 Too Many Requests` with the sam
 | `CACHE_MAXSIZE` | `4096` | LRU cache maximum entries |
 | `CACHE_TTL` | `3600` | Cache time-to-live in seconds |
 | `RUN_MIGRATIONS` | `true` | Run Alembic migrations on startup |
+| `LOG_FORMAT` | `text` | `text` for human-readable, `json` for structured JSON |
+| `LOG_LEVEL` | `INFO` | Standard Python log levels |
+
+## Observability
+
+### Structured Logging
+
+The API supports two log formats controlled by `LOG_FORMAT`:
+
+- **`text`** (default) — Human-readable format with optional request ID prefix: `2024-01-15 12:00:00 INFO     [abcdef123456] geohealth.access - GET /health 200 1.23ms`
+- **`json`** — Single-line JSON for log aggregators with `timestamp`, `level`, `logger`, `message`, `request_id`, and optional `exception` fields
+
+### Request Correlation
+
+Every request gets an `X-Request-ID` header. If the client sends one, it is echoed back; otherwise a new UUID is generated. The request ID is included in all log lines and is available to downstream services for distributed tracing.
+
+### Application Metrics
+
+`GET /metrics` returns a JSON snapshot of application metrics:
+
+- **Request counters** — total requests, status code breakdown
+- **Cache stats** — hits, misses, hit rate, current size
+- **Geocoder stats** — Census/Nominatim success and failure counts
+- **Narrative stats** — success and failure counts
+- **Latency percentiles** — p50, p90, p95, p99
+
+### Enhanced Health Check
+
+`GET /health` now includes cache, rate limiter, and uptime information when the database is healthy.
 
 ## Development
 

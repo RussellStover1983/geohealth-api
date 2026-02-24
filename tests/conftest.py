@@ -6,6 +6,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from geohealth.api.main import app
+from geohealth.services.metrics import metrics
 from geohealth.services.rate_limiter import rate_limiter
 
 
@@ -22,3 +23,11 @@ def _clear_rate_limiter():
     rate_limiter.clear()
     yield
     rate_limiter.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_metrics():
+    """Reset the metrics collector between every test."""
+    metrics.reset()
+    yield
+    metrics.reset()

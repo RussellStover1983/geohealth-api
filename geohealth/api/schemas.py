@@ -23,6 +23,20 @@ class ErrorResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class CacheHealth(BaseModel):
+    """Cache subsystem status."""
+
+    size: int = Field(..., description="Current number of cached entries")
+    max_size: int = Field(..., description="Maximum cache capacity")
+    hit_rate: float = Field(..., description="Cache hit rate (0.0–1.0)")
+
+
+class RateLimiterHealth(BaseModel):
+    """Rate limiter subsystem status."""
+
+    active_keys: int = Field(..., description="Number of tracked API key buckets")
+
+
 class HealthResponse(BaseModel):
     """Health-check result indicating API and database status."""
 
@@ -34,6 +48,15 @@ class HealthResponse(BaseModel):
     )
     detail: str | None = Field(
         None, description="Error detail when database is unreachable"
+    )
+    cache: CacheHealth | None = Field(
+        None, description="Cache subsystem health (present when status is ok)"
+    )
+    rate_limiter: RateLimiterHealth | None = Field(
+        None, description="Rate limiter health (present when status is ok)"
+    )
+    uptime_seconds: float | None = Field(
+        None, description="Seconds since the process started"
     )
 
 

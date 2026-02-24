@@ -6,6 +6,7 @@ import httpx
 from pydantic import BaseModel
 
 from geohealth.config import settings
+from geohealth.services.metrics import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +23,18 @@ class GeocodedLocation(BaseModel):
 async def geocode(address: str) -> GeocodedLocation:
     """Geocode an address. Tries Census Bureau first, falls back to Nominatim."""
     try:
-        return await _geocode_census(address)
+        result = await _geocode_census(address)
+        metrics.inc_geocoder("census")
+        return result
     except Exception:
         logger.warning("Census geocoder failed for %r, falling back to Nominatim", address)
-        return await _geocode_nominatim(address)
+    try:
+        result = await _geocode_nominatim(address)
+        metrics.inc_geocoder("nominatim")
+        return result
+    except Exception:
+        metrics.inc_geocoder("failure")
+        raise
 
 
 async def _geocode_census(address: str) -> GeocodedLocation:
