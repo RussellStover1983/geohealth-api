@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 
 import pandas as pd
 from sqlalchemy import create_engine

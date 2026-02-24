@@ -133,3 +133,19 @@ Tests use **no live database** — everything is mocked via `unittest.mock` (`As
 | `ANTHROPIC_API_KEY` | — | For narrative generation |
 | `BATCH_MAX_SIZE` | `50` | Max addresses per batch request |
 | `RUN_MIGRATIONS` | `true` | Set `false` in tests to skip Alembic on startup |
+
+## CI/CD
+
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to master and on PRs:
+
+1. **lint** — installs ruff, runs `ruff check geohealth/ tests/`
+2. **test** — installs `.[dev]`, runs `pytest --tb=short -q` with `RUN_MIGRATIONS=false`
+3. **docker** — (push to master only, after lint+test pass) builds multi-stage Docker image and pushes to GHCR with `sha-<commit>` and `latest` tags, using GitHub Actions build cache
+
+### Docker Production Setup
+
+- **Multi-stage build** — builder stage compiles deps into `/opt/venv`, runtime stage copies only the venv + app code with minimal system packages (`libpq5`, `curl`)
+- **Gunicorn + Uvicorn workers** — `gunicorn --worker-class uvicorn.workers.UvicornWorker --workers 2` (configured in `Dockerfile` CMD)
+- **Non-root user** — runs as `appuser`
+- **Health checks** — `docker-compose.yml` includes health checks for both `db` (pg_isready) and `api` (curl /health)
+- **Restart policy** — `restart: unless-stopped` on both services

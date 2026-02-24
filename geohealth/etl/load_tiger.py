@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 import tempfile
 from pathlib import Path
 from urllib.request import urlretrieve
