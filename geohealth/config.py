@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 60
     rate_limit_window: int = 60
     batch_max_size: int = 50
+    run_migrations: bool = True
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

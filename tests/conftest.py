@@ -1,3 +1,7 @@
+import os
+
+os.environ["RUN_MIGRATIONS"] = "false"
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 

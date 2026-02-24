@@ -90,9 +90,12 @@ def load_state(year: int, state_fips: str, engine) -> int:
 
 
 def ensure_table(engine):
-    """Create the tract_profiles table if it doesn't exist."""
-    from geohealth.db.models import Base
-    Base.metadata.create_all(engine)
+    """Run Alembic migrations to ensure the tract_profiles table exists."""
+    from alembic import command
+    from alembic.config import Config
+
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
 
 
 def main(argv: list[str] | None = None):

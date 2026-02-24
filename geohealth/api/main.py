@@ -23,7 +23,6 @@ from geohealth.api.routes.nearby import router as nearby_router
 from geohealth.api.routes.stats import router as stats_router
 from geohealth.api.schemas import ErrorResponse, HealthResponse
 from geohealth.config import settings
-from geohealth.db.models import Base
 from geohealth.db.session import engine
 
 logger = logging.getLogger("geohealth")
@@ -31,9 +30,12 @@ logger = logging.getLogger("geohealth")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables on startup (no Alembic in Phase 1)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if settings.run_migrations:
+        from alembic import command
+        from alembic.config import Config
+
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
     yield
     await engine.dispose()
 
