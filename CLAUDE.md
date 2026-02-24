@@ -32,6 +32,12 @@ pip install -e ".[dev,etl]"       # Include ETL deps (geopandas, shapely, etc.)
 # Data loading
 python -m geohealth.etl.load_all --state 27         # Single state
 python -m geohealth.etl.load_all --state all --resume  # All states, resumable
+
+# Migrations (requires running PostGIS)
+alembic upgrade head                                  # Apply all migrations
+alembic revision --autogenerate -m "description"      # Generate new migration
+alembic stamp head                                    # Mark existing DB as current (for DBs created by create_all)
+alembic history                                       # Show migration history
 ```
 
 ## Conventions
@@ -78,9 +84,20 @@ Thread-safe LRU + TTL cache (`services/cache.py`). Cache key = coordinates round
 
 Sliding-window per-key rate limiter (`services/rate_limiter.py`). Thread-safe with `threading.Lock`. Returns `X-RateLimit-*` headers on every response including 429s. Default: 60 req/60s.
 
-### Table Creation
+### Schema Migrations
 
-`Base.metadata.create_all` in FastAPI lifespan — no Alembic migrations yet. Single table `tract_profiles` with GIST index on `geom` and B-tree on `state_fips`.
+Alembic manages schema evolution. Migrations live in `geohealth/migrations/versions/`. On startup, `alembic upgrade head` runs automatically unless `RUN_MIGRATIONS=false` (tests set this). The `env.py` reads `database_url_sync` from pydantic-settings and filters out the PostGIS `spatial_ref_sys` table during autogenerate.
+
+For existing databases created by the old `create_all`, run `alembic stamp head` once to mark them as current.
+
+### JSONB Data Source Pattern
+
+Each external data source gets its own JSONB column (e.g., `svi_themes`, `places_measures`). This means:
+- **New data source** (e.g., `epa_data JSONB`) → one `alembic revision --autogenerate` migration
+- **New metric within existing source** (e.g., adding `"pm25": 8.2` to `places_measures`) → no migration needed
+- **New computed index** (e.g., `env_index Float`) → one migration
+
+Existing fixed ACS columns (`poverty_rate`, etc.) stay as-is for backward compatibility. `TractDataModel` has `extra = "allow"` so new JSONB fields flow through the API automatically.
 
 ## Testing Patterns
 
@@ -115,3 +132,4 @@ Tests use **no live database** — everything is mocked via `unittest.mock` (`As
 | `RATE_LIMIT_PER_MINUTE` | `60` | Per-key limit |
 | `ANTHROPIC_API_KEY` | — | For narrative generation |
 | `BATCH_MAX_SIZE` | `50` | Max addresses per batch request |
+| `RUN_MIGRATIONS` | `true` | Set `false` in tests to skip Alembic on startup |
