@@ -107,26 +107,6 @@ _OPENAPI_TAGS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging(settings.log_level, settings.log_format)
-
-    # --- Temporary auth diagnostics (remove after Railway deploy is verified) ---
-    _raw = settings.api_keys
-    logger.warning(
-        "AUTH DIAGNOSTICS: auth_enabled=%s, api_keys length=%d, "
-        "api_keys repr=%r, api_keys first 10 chars=%r",
-        settings.auth_enabled,
-        len(_raw),
-        _raw[:20] + "..." if len(_raw) > 20 else _raw,
-        _raw[:10],
-    )
-    from geohealth.api.auth import _valid_key_hashes
-    _hashes = _valid_key_hashes()
-    logger.warning(
-        "AUTH DIAGNOSTICS: parsed %d valid key hash(es): %s",
-        len(_hashes),
-        [h[:12] + "..." for h in _hashes],
-    )
-    # --- End temporary auth diagnostics ---
-
     if settings.run_migrations:
         from alembic import command
         from alembic.config import Config

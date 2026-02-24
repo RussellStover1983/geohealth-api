@@ -43,7 +43,12 @@ USER appuser
 
 EXPOSE 8000
 
-CMD gunicorn geohealth.api.main:app \
+# Disable in-worker migrations — migrations run once in CMD before gunicorn starts.
+# Local dev (uvicorn --reload) still uses RUN_MIGRATIONS=true from config.py default.
+ENV RUN_MIGRATIONS=false
+
+CMD alembic upgrade head && \
+    exec gunicorn geohealth.api.main:app \
     --bind "0.0.0.0:${PORT:-8000}" \
     --worker-class uvicorn.workers.UvicornWorker \
     --workers 2 \
