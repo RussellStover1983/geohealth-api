@@ -21,8 +21,22 @@ MILES_TO_METERS = 1609.344
 
 @router.get(
     "/nearby",
+    summary="Find nearby census tracts",
+    description=(
+        "Return census tracts within a given radius of a point, sorted by "
+        "distance (nearest first). Uses PostGIS `ST_DWithin` for efficient "
+        "spatial filtering.\n\n"
+        "Results are paginated via `offset` and `limit`. The response "
+        "includes `total` (all matching tracts) and `count` (tracts in "
+        "the current page)."
+    ),
     response_model=NearbyResponse,
-    responses={429: {"model": ErrorResponse}},
+    responses={
+        401: {"model": ErrorResponse, "description": "Missing API key"},
+        403: {"model": ErrorResponse, "description": "Invalid API key"},
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
+    },
 )
 async def get_nearby(
     response: Response,

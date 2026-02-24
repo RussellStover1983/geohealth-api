@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
@@ -11,9 +11,11 @@ from pydantic import BaseModel
 
 
 class ErrorResponse(BaseModel):
-    error: bool = True
-    status_code: int
-    detail: str
+    """Structured error returned by all non-2xx responses."""
+
+    error: bool = Field(True, description="Always true for error responses")
+    status_code: int = Field(..., description="HTTP status code")
+    detail: str = Field(..., description="Human-readable error message")
 
 
 # ---------------------------------------------------------------------------
@@ -22,9 +24,17 @@ class ErrorResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    status: str
-    database: str
-    detail: str | None = None
+    """Health-check result indicating API and database status."""
+
+    status: str = Field(
+        ..., description="Overall status: 'ok' or 'degraded'"
+    )
+    database: str = Field(
+        ..., description="Database connectivity: 'connected' or 'unreachable'"
+    )
+    detail: str | None = Field(
+        None, description="Error detail when database is unreachable"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -33,35 +43,136 @@ class HealthResponse(BaseModel):
 
 
 class LocationModel(BaseModel):
-    lat: float
-    lng: float
-    matched_address: str
+    """Geocoded location returned with every context lookup."""
+
+    lat: float = Field(..., description="Latitude of the matched location")
+    lng: float = Field(..., description="Longitude of the matched location")
+    matched_address: str = Field(
+        ..., description="Address string as matched by the geocoder"
+    )
 
 
 class TractDataModel(BaseModel):
-    geoid: str
-    state_fips: str
-    county_fips: str
-    tract_code: str
-    name: str | None = None
-    total_population: int | None = None
-    median_household_income: float | None = None
-    poverty_rate: float | None = None
-    uninsured_rate: float | None = None
-    unemployment_rate: float | None = None
-    median_age: float | None = None
-    svi_themes: dict | None = None
-    places_measures: dict | None = None
-    sdoh_index: float | None = None
+    """Census tract profile with demographics, SVI themes, and health measures.
 
-    model_config = {"extra": "allow"}
+    Fixed ACS columns are always present. JSONB-backed fields (`svi_themes`,
+    `places_measures`) contain nested dictionaries whose keys may grow over
+    time without requiring schema changes. The model uses `extra = "allow"`
+    so new fields flow through automatically.
+    """
+
+    geoid: str = Field(
+        ..., description="11-digit census tract GEOID (state + county + tract)"
+    )
+    state_fips: str = Field(
+        ..., description="2-digit state FIPS code"
+    )
+    county_fips: str = Field(
+        ..., description="3-digit county FIPS code"
+    )
+    tract_code: str = Field(
+        ..., description="6-digit census tract code"
+    )
+    name: str | None = Field(
+        None, description="Human-readable tract name"
+    )
+    total_population: int | None = Field(
+        None, description="ACS total population estimate"
+    )
+    median_household_income: float | None = Field(
+        None, description="ACS median household income in dollars"
+    )
+    poverty_rate: float | None = Field(
+        None, description="Percentage of population below poverty line"
+    )
+    uninsured_rate: float | None = Field(
+        None, description="Percentage of population without health insurance"
+    )
+    unemployment_rate: float | None = Field(
+        None, description="Percentage of civilian labor force unemployed"
+    )
+    median_age: float | None = Field(
+        None, description="Median age of the population"
+    )
+    svi_themes: dict | None = Field(
+        None,
+        description=(
+            "CDC/ATSDR Social Vulnerability Index theme percentile rankings. "
+            "Keys: socioeconomic_status, household_disability, "
+            "minority_status, housing_transportation"
+        ),
+    )
+    places_measures: dict | None = Field(
+        None,
+        description=(
+            "CDC PLACES health outcome measures (crude prevalence %). "
+            "Keys include: diabetes, obesity, mental_health, "
+            "physical_inactivity, smoking, binge_drinking, sleep_lt7, etc."
+        ),
+    )
+    sdoh_index: float | None = Field(
+        None,
+        description="Composite social determinants of health index (0-1 scale)",
+    )
+
+    model_config = {
+        "extra": "allow",
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "geoid": "27053026200",
+                    "state_fips": "27",
+                    "county_fips": "053",
+                    "tract_code": "026200",
+                    "name": "Census Tract 262, Hennepin County, MN",
+                    "total_population": 4521,
+                    "median_household_income": 72500.0,
+                    "poverty_rate": 11.3,
+                    "uninsured_rate": 5.8,
+                    "unemployment_rate": 4.2,
+                    "median_age": 34.7,
+                    "svi_themes": {
+                        "socioeconomic_status": 0.35,
+                        "household_disability": 0.42,
+                        "minority_status": 0.61,
+                        "housing_transportation": 0.28,
+                    },
+                    "places_measures": {
+                        "diabetes": 9.1,
+                        "obesity": 28.4,
+                        "mental_health": 14.7,
+                        "physical_inactivity": 22.3,
+                        "smoking": 15.1,
+                        "binge_drinking": 18.6,
+                        "sleep_lt7": 35.2,
+                    },
+                    "sdoh_index": 0.41,
+                }
+            ]
+        },
+    }
 
 
 class ContextResponse(BaseModel):
-    location: LocationModel
-    tract: TractDataModel | None = None
-    narrative: str | None = None
-    data: TractDataModel | None = None
+    """Primary response for a geographic health context lookup."""
+
+    location: LocationModel = Field(
+        ..., description="Geocoded coordinates and matched address"
+    )
+    tract: TractDataModel | None = Field(
+        None, description="Census tract profile for the location"
+    )
+    narrative: str | None = Field(
+        None,
+        description=(
+            "AI-generated narrative summary of the tract data "
+            "(only when narrative=true)"
+        ),
+    )
+    data: TractDataModel | None = Field(
+        None,
+        description="Alias for tract (deprecated, use 'tract' instead)",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -70,24 +181,48 @@ class ContextResponse(BaseModel):
 
 
 class BatchResultLocation(BaseModel):
-    lat: float
-    lng: float
-    matched_address: str
+    """Geocoded location for a single batch result."""
+
+    lat: float = Field(..., description="Latitude of the matched location")
+    lng: float = Field(..., description="Longitude of the matched location")
+    matched_address: str = Field(
+        ..., description="Address string as matched by the geocoder"
+    )
 
 
 class BatchResultItem(BaseModel):
-    address: str
-    status: str
-    location: BatchResultLocation | None = None
-    tract: TractDataModel | None = None
-    error: str | None = None
+    """Result for a single address in a batch request."""
+
+    address: str = Field(
+        ..., description="Original input address"
+    )
+    status: str = Field(
+        ..., description="Result status: 'ok' or 'error'"
+    )
+    location: BatchResultLocation | None = Field(
+        None, description="Geocoded location (null on error)"
+    )
+    tract: TractDataModel | None = Field(
+        None, description="Census tract data (null on error)"
+    )
+    error: str | None = Field(
+        None, description="Error message (null on success)"
+    )
 
 
 class BatchResponse(BaseModel):
-    total: int
-    succeeded: int
-    failed: int
-    results: list[BatchResultItem]
+    """Aggregated results for a batch address lookup."""
+
+    total: int = Field(..., description="Total number of addresses submitted")
+    succeeded: int = Field(
+        ..., description="Number of addresses successfully resolved"
+    )
+    failed: int = Field(
+        ..., description="Number of addresses that failed"
+    )
+    results: list[BatchResultItem] = Field(
+        ..., description="Per-address results in submission order"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -96,31 +231,71 @@ class BatchResponse(BaseModel):
 
 
 class NearbyCenter(BaseModel):
-    lat: float
-    lng: float
+    """Center point used for the nearby search."""
+
+    lat: float = Field(..., description="Latitude of the center point")
+    lng: float = Field(..., description="Longitude of the center point")
 
 
 class NearbyTract(BaseModel):
-    geoid: str
-    name: str | None = None
-    distance_miles: float
-    total_population: int | None = None
-    median_household_income: float | None = None
-    poverty_rate: float | None = None
-    uninsured_rate: float | None = None
-    unemployment_rate: float | None = None
-    median_age: float | None = None
-    sdoh_index: float | None = None
+    """Census tract within the search radius, with distance."""
+
+    geoid: str = Field(
+        ..., description="11-digit census tract GEOID"
+    )
+    name: str | None = Field(
+        None, description="Human-readable tract name"
+    )
+    distance_miles: float = Field(
+        ..., description="Distance from center point in miles"
+    )
+    total_population: int | None = Field(
+        None, description="ACS total population estimate"
+    )
+    median_household_income: float | None = Field(
+        None, description="ACS median household income in dollars"
+    )
+    poverty_rate: float | None = Field(
+        None, description="Percentage below poverty line"
+    )
+    uninsured_rate: float | None = Field(
+        None, description="Percentage without health insurance"
+    )
+    unemployment_rate: float | None = Field(
+        None, description="Percentage of labor force unemployed"
+    )
+    median_age: float | None = Field(
+        None, description="Median age of the population"
+    )
+    sdoh_index: float | None = Field(
+        None, description="Composite SDOH index (0-1 scale)"
+    )
 
 
 class NearbyResponse(BaseModel):
-    center: NearbyCenter
-    radius_miles: float
-    count: int
-    total: int
-    offset: int
-    limit: int
-    tracts: list[NearbyTract]
+    """Paginated list of census tracts within a radius."""
+
+    center: NearbyCenter = Field(
+        ..., description="Center point of the search"
+    )
+    radius_miles: float = Field(
+        ..., description="Search radius in miles"
+    )
+    count: int = Field(
+        ..., description="Number of tracts in this page"
+    )
+    total: int = Field(
+        ..., description="Total tracts within the radius"
+    )
+    offset: int = Field(
+        ..., description="Number of rows skipped"
+    )
+    limit: int = Field(
+        ..., description="Maximum rows returned per page"
+    )
+    tracts: list[NearbyTract] = Field(
+        ..., description="Tracts sorted by distance (nearest first)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -129,36 +304,87 @@ class NearbyResponse(BaseModel):
 
 
 class CompareValues(BaseModel):
-    total_population: float | None = None
-    median_household_income: float | None = None
-    poverty_rate: float | None = None
-    uninsured_rate: float | None = None
-    unemployment_rate: float | None = None
-    median_age: float | None = None
-    sdoh_index: float | None = None
+    """Numeric values used in a tract comparison."""
+
+    total_population: float | None = Field(
+        None, description="Total population (or average)"
+    )
+    median_household_income: float | None = Field(
+        None, description="Median household income in dollars"
+    )
+    poverty_rate: float | None = Field(
+        None, description="Poverty rate percentage"
+    )
+    uninsured_rate: float | None = Field(
+        None, description="Uninsured rate percentage"
+    )
+    unemployment_rate: float | None = Field(
+        None, description="Unemployment rate percentage"
+    )
+    median_age: float | None = Field(
+        None, description="Median age"
+    )
+    sdoh_index: float | None = Field(
+        None, description="Composite SDOH index (0-1 scale)"
+    )
 
 
 class CompareSide(BaseModel):
-    type: str
-    geoid: str | None = None
-    label: str
-    values: CompareValues
+    """One side (A or B) of a comparison."""
+
+    type: str = Field(
+        ...,
+        description=(
+            "Entity type: 'tract', 'state_average', or 'national_average'"
+        ),
+    )
+    geoid: str | None = Field(
+        None, description="Tract GEOID (null for averages)"
+    )
+    label: str = Field(
+        ..., description="Human-readable label for this side"
+    )
+    values: CompareValues = Field(
+        ..., description="Numeric values for this entity"
+    )
 
 
 class CompareDifferences(BaseModel):
-    total_population: float | None = None
-    median_household_income: float | None = None
-    poverty_rate: float | None = None
-    uninsured_rate: float | None = None
-    unemployment_rate: float | None = None
-    median_age: float | None = None
-    sdoh_index: float | None = None
+    """Difference (A minus B) for each compared metric."""
+
+    total_population: float | None = Field(
+        None, description="Population difference (A - B)"
+    )
+    median_household_income: float | None = Field(
+        None, description="Income difference (A - B)"
+    )
+    poverty_rate: float | None = Field(
+        None, description="Poverty rate difference (A - B)"
+    )
+    uninsured_rate: float | None = Field(
+        None, description="Uninsured rate difference (A - B)"
+    )
+    unemployment_rate: float | None = Field(
+        None, description="Unemployment rate difference (A - B)"
+    )
+    median_age: float | None = Field(
+        None, description="Median age difference (A - B)"
+    )
+    sdoh_index: float | None = Field(
+        None, description="SDOH index difference (A - B)"
+    )
 
 
 class CompareResponse(BaseModel):
-    a: CompareSide
-    b: CompareSide
-    differences: CompareDifferences
+    """Side-by-side comparison of two entities with computed differences."""
+
+    a: CompareSide = Field(..., description="First entity (the tract)")
+    b: CompareSide = Field(
+        ..., description="Second entity (tract or average)"
+    )
+    differences: CompareDifferences = Field(
+        ..., description="A minus B for each metric"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -167,13 +393,27 @@ class CompareResponse(BaseModel):
 
 
 class StateCount(BaseModel):
-    state_fips: str
-    tract_count: int
+    """Tract count for a single state."""
+
+    state_fips: str = Field(..., description="2-digit state FIPS code")
+    tract_count: int = Field(
+        ..., description="Number of loaded census tracts"
+    )
 
 
 class StatsResponse(BaseModel):
-    total_states: int
-    total_tracts: int
-    offset: int
-    limit: int
-    states: list[StateCount]
+    """Paginated summary of loaded data by state."""
+
+    total_states: int = Field(
+        ..., description="Total number of states with loaded data"
+    )
+    total_tracts: int = Field(
+        ..., description="Total number of loaded census tracts across all states"
+    )
+    offset: int = Field(..., description="Number of state rows skipped")
+    limit: int = Field(
+        ..., description="Maximum state rows returned per page"
+    )
+    states: list[StateCount] = Field(
+        ..., description="Per-state tract counts"
+    )

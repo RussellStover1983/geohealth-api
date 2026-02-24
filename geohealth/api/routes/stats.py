@@ -15,8 +15,18 @@ router = APIRouter(prefix="/v1", tags=["stats"])
 
 @router.get(
     "/stats",
+    summary="Data loading statistics",
+    description=(
+        "Return a paginated summary of loaded census tract data: total "
+        "states, total tracts, and a per-state breakdown ordered by "
+        "state FIPS code."
+    ),
     response_model=StatsResponse,
-    responses={429: {"model": ErrorResponse}},
+    responses={
+        401: {"model": ErrorResponse, "description": "Missing API key"},
+        403: {"model": ErrorResponse, "description": "Invalid API key"},
+        429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
+    },
 )
 async def get_stats(
     response: Response,
