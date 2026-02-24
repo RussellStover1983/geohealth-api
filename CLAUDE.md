@@ -99,6 +99,20 @@ The API is self-documenting via OpenAPI 3.1:
 
 Documentation lives in the code: Pydantic model `Field(description=...)` and `json_schema_extra` examples drive the schema; FastAPI route decorators provide `summary`, `description`, and per-status-code `responses`. The `_DESCRIPTION` and `_OPENAPI_TAGS` constants in `main.py` supply the top-level API description and tag groupings.
 
+### Python SDK
+
+Typed client library in `geohealth/sdk/` wrapping every API endpoint:
+
+```
+geohealth/sdk/
+├── __init__.py      # Re-exports public API
+├── models.py        # RateLimitInfo frozen dataclass
+├── exceptions.py    # GeoHealthError hierarchy (Auth, RateLimit, NotFound, Validation)
+└── client.py        # AsyncGeoHealthClient + GeoHealthClient
+```
+
+Both clients accept `base_url`, `api_key`, `timeout`, and a `_transport` parameter for testing. Methods return typed Pydantic models from `geohealth.api.schemas`. The `last_rate_limit` attribute is updated after every request. Tests use `httpx.MockTransport` — no server or patching needed.
+
 ### JSONB Data Source Pattern
 
 Each external data source gets its own JSONB column (e.g., `svi_themes`, `places_measures`). This means:

@@ -130,6 +130,48 @@ curl -H "X-API-Key: test" \
 curl -H "X-API-Key: test" "http://localhost:8000/v1/stats"
 ```
 
+## Python SDK
+
+The project includes a typed Python SDK that wraps every endpoint with both async and sync clients.
+
+### Async usage
+
+```python
+from geohealth.sdk import AsyncGeoHealthClient
+
+async with AsyncGeoHealthClient("http://localhost:8000", api_key="your-key") as client:
+    result = await client.context(address="1234 Main St, Minneapolis, MN 55401")
+    print(result.tract.geoid, result.tract.poverty_rate)
+
+    nearby = await client.nearby(lat=44.9778, lng=-93.265, radius=3.0)
+    for tract in nearby.tracts:
+        print(tract.geoid, tract.distance_miles)
+```
+
+### Sync usage
+
+```python
+from geohealth.sdk import GeoHealthClient
+
+with GeoHealthClient("http://localhost:8000", api_key="your-key") as client:
+    result = client.context(lat=44.9778, lng=-93.265)
+    print(result.tract.geoid)
+```
+
+### Error handling
+
+```python
+from geohealth.sdk import AsyncGeoHealthClient, RateLimitError, AuthenticationError
+
+async with AsyncGeoHealthClient("http://localhost:8000", api_key="your-key") as client:
+    try:
+        result = await client.context(address="123 Main St")
+    except RateLimitError as exc:
+        print(f"Rate limited! Resets in {exc.rate_limit_info.reset}s")
+    except AuthenticationError as exc:
+        print(f"Auth failed: {exc.detail}")
+```
+
 ## Rate Limiting
 
 Every authenticated response includes rate-limit headers:
