@@ -134,6 +134,10 @@ Existing fixed ACS columns (`poverty_rate`, etc.) stay as-is for backward compat
 
 **Enhanced `/health`**: Returns cache size/hit-rate, rate limiter active keys, and uptime when healthy. Degraded response stays unchanged for backward compatibility.
 
+### Deployment
+
+The API deploys to **Railway** using the existing multi-stage Dockerfile. Railway configuration lives in `railway.toml`. The Dockerfile CMD uses shell form with `${PORT:-8000}` so Railway can inject its dynamic port while local `docker compose` falls back to 8000. PostGIS runs as a custom Docker service on Railway (their managed Postgres lacks PostGIS binaries). See the README's "Deployment (Railway)" section for full setup instructions.
+
 ## Testing Patterns
 
 Tests use **no live database** — everything is mocked via `unittest.mock` (`AsyncMock`, `MagicMock`, `patch`).

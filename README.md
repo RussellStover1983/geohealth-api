@@ -229,6 +229,90 @@ Every request gets an `X-Request-ID` header. If the client sends one, it is echo
 
 `GET /health` now includes cache, rate limiter, and uptime information when the database is healthy.
 
+## Deployment (Railway)
+
+The API is configured for deployment on [Railway](https://railway.app) using the existing multi-stage Dockerfile.
+
+### Prerequisites
+
+- A [Railway](https://railway.app) account
+- The GitHub repo linked to your Railway project
+
+### 1. Create a Railway project
+
+1. In the Railway dashboard, click **New Project** → **Deploy from GitHub Repo**
+2. Select the `geohealth-api` repository
+3. Railway will detect the `railway.toml` and build from the Dockerfile automatically
+
+### 2. Add a PostGIS database service
+
+Railway's managed Postgres does not include PostGIS binaries, so add a **custom Docker service**:
+
+1. In your Railway project, click **New** → **Docker Image**
+2. Set the image to `postgis/postgis:16-3.4`
+3. Add a **persistent volume** mounted at `/var/lib/postgresql/data`
+4. Add these environment variables to the PostGIS service:
+   - `POSTGRES_USER=geohealth`
+   - `POSTGRES_PASSWORD=<strong-password>`
+   - `POSTGRES_DB=geohealth`
+5. Note the service's internal hostname (e.g., `postgis.railway.internal`) and port
+
+### 3. Configure environment variables on the API service
+
+Set these variables on the **API service** (not the PostGIS service):
+
+| Variable | Value |
+|----------|-------|
+| `DATABASE_URL` | `postgresql+asyncpg://geohealth:<password>@${{PostGIS.RAILWAY_PRIVATE_DOMAIN}}:5432/geohealth` |
+| `DATABASE_URL_SYNC` | `postgresql://geohealth:<password>@${{PostGIS.RAILWAY_PRIVATE_DOMAIN}}:5432/geohealth` |
+| `AUTH_ENABLED` | `true` |
+| `API_KEYS` | Comma-separated SHA-256 hashes (see step 6) |
+| `CORS_ORIGINS` | Your frontend domain(s), e.g., `https://app.example.com` |
+| `LOG_FORMAT` | `json` |
+| `ANTHROPIC_API_KEY` | *(optional)* Your Anthropic key for AI narrative generation |
+
+### 4. Deploy and verify
+
+Railway auto-deploys on push to `master`. After the build completes:
+
+```bash
+curl https://<your-app>.railway.app/health
+# {"status":"ok","database":"connected","detail":null}
+```
+
+### 5. Load census data
+
+Run the ETL from your local machine against Railway's **public** database URL (found in the PostGIS service's networking settings):
+
+```bash
+pip install -e ".[etl]"
+DATABASE_URL_SYNC=postgresql://geohealth:<password>@<public-host>:<port>/geohealth \
+  python -m geohealth.etl.load_all --state 27
+```
+
+For all states (resumable):
+
+```bash
+DATABASE_URL_SYNC=postgresql://geohealth:<password>@<public-host>:<port>/geohealth \
+  python -m geohealth.etl.load_all --state all --resume
+```
+
+### 6. Generate and distribute API keys
+
+Generate a random key and its SHA-256 hash:
+
+```bash
+python -c "
+import secrets, hashlib
+key = secrets.token_urlsafe(32)
+hashed = hashlib.sha256(key.encode()).hexdigest()
+print(f'Give to client: {key}')
+print(f'Add to API_KEYS: {hashed}')
+"
+```
+
+Add the hash to `API_KEYS` in Railway's environment variables (comma-separated if multiple). Distribute the plaintext key to the API consumer — the API never stores or logs it.
+
 ## Development
 
 ### Local setup
