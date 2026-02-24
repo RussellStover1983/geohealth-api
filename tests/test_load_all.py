@@ -1,5 +1,9 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytest.importorskip("pandas", reason="ETL tests require pandas (install with .[dev,etl])")
+
 from geohealth.etl.load_all import run_pipeline, query_loaded_states
 
 
