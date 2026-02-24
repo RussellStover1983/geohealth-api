@@ -1,0 +1,40 @@
+# Version control
+.git
+.github
+
+# Environment / secrets
+.env
+.env.*
+
+# Tests
+tests/
+
+# Caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Claude Code
+.claude/
+
+# Docker volumes
+pgdata/
+
+# Editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Documentation (not needed at runtime)
+geohealth-api-summary/

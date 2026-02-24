@@ -17,6 +17,7 @@ dependencies = [
     "anthropic>=0.39,<1",
     "alembic>=1.13,<2",
     "psycopg2-binary>=2.9,<3",
+    "gunicorn>=22,<24",
 ]
 
 [project.optional-dependencies]
