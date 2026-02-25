@@ -55,7 +55,7 @@ mcp = [
 [project.urls]
 Homepage = "https://github.com/RussellStover1983/geohealth-api"
 Repository = "https://github.com/RussellStover1983/geohealth-api"
-Documentation = "https://geohealth-api-production.up.railway.app/docs"
+Documentation = "https://russellstover1983.github.io/geohealth-api/"
 Issues = "https://github.com/RussellStover1983/geohealth-api/issues"
 
 [build-system]

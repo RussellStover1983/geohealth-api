@@ -1,0 +1,50 @@
+site_name: GeoHealth API
+site_description: Census-tract-level geographic health intelligence for clinical tools
+site_url: https://russellstover1983.github.io/geohealth-api/
+repo_url: https://github.com/RussellStover1983/geohealth-api
+repo_name: RussellStover1983/geohealth-api
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - search.highlight
+    - search.share
+
+nav:
+  - Home: index.md
+  - Quick Start: quickstart.md
+  - API Reference: api-reference.md
+  - Data Dictionary: data-dictionary.md
+  - Python SDK & MCP: sdk.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - tables
+  - attr_list
+  - md_in_html

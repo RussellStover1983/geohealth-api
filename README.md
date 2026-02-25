@@ -1,5 +1,7 @@
 # GeoHealth Context API
 
+**[Documentation](https://russellstover1983.github.io/geohealth-api/)** | [PyPI](https://pypi.org/project/geohealth-api/) | [Swagger UI](https://geohealth-api-production.up.railway.app/docs)
+
 Census-tract-level geographic health intelligence API. Given a street address or lat/lng coordinates, returns **demographics**, **CDC/ATSDR Social Vulnerability Index (SVI) themes**, **CDC PLACES health outcome measures**, and an optional **AI-generated narrative** for the surrounding census tract.
 
 ## Features
