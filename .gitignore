@@ -24,3 +24,6 @@ venv/
 *.swo
 
 pgdata/
+
+.claude/
+geohealth-api-summary
