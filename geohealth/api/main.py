@@ -107,6 +107,18 @@ _OPENAPI_TAGS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging(settings.log_level, settings.log_format)
+
+    # Temporary: log auth config to diagnose 403 (remove once verified)
+    from geohealth.api.auth import _valid_key_hashes, _hash_key
+    _hashes = _valid_key_hashes()
+    logger.warning(
+        "AUTH DEBUG: api_keys=%r, parsed_hashes=%d, test_hash=%s, match=%s",
+        settings.api_keys,
+        len(_hashes),
+        _hash_key("testkey123")[:16],
+        _hash_key("testkey123") in _hashes,
+    )
+
     if settings.run_migrations:
         from alembic import command
         from alembic.config import Config
