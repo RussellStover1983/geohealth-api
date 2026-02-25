@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 
 from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader
 
 from geohealth.config import settings
+
+logger = logging.getLogger("geohealth.auth")
 
 _header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -59,7 +62,18 @@ async def require_api_key(
         raise HTTPException(status_code=401, detail="Missing API key")
 
     hashed = _hash_key(api_key)
-    if hashed not in _valid_key_hashes():
+    valid = _valid_key_hashes()
+    # Temporary debug logging (remove after Railway auth verified)
+    logger.warning(
+        "AUTH REQUEST: received_key=%r (len=%d), hashed=%s, "
+        "valid_hashes=%d, match=%s",
+        api_key[:4] + "..." if len(api_key) > 4 else api_key,
+        len(api_key),
+        hashed[:16],
+        len(valid),
+        hashed in valid,
+    )
+    if hashed not in valid:
         raise HTTPException(status_code=403, detail="Invalid API key")
 
     return hashed
