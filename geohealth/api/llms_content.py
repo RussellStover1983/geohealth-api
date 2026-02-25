@@ -30,8 +30,8 @@ LLMS_TXT = """\
 ## Key Data Fields
 
 - **Demographics (ACS)**: total_population, median_household_income, poverty_rate, uninsured_rate, unemployment_rate, median_age
-- **Vulnerability (SVI)**: socioeconomic_status, household_disability, minority_status, housing_transportation, overall — all as 0-1 percentiles
-- **Health Outcomes (PLACES)**: diabetes, obesity, mental_health, physical_health, high_blood_pressure, smoking, asthma, coronary_heart_disease, physical_inactivity, binge_drinking, sleep_lt7, checkup, dental, lack_of_insurance — all as crude prevalence %
+- **Vulnerability (SVI)**: rpl_theme1 (socioeconomic), rpl_theme2 (household/disability), rpl_theme3 (minority/language), rpl_theme4 (housing/transportation), rpl_themes (overall) — all as 0-1 percentiles
+- **Health Outcomes (PLACES)**: diabetes, obesity, mhlth (mental health), phlth (physical health), bphigh (high blood pressure), csmoking (smoking), casthma (asthma), chd (coronary heart disease), lpa (physical inactivity), binge (binge drinking), sleep (short sleep), checkup, dental, access2 (no insurance) — all as crude prevalence %
 - **Composite**: sdoh_index (0-1 scale, higher = more vulnerable)
 
 ## MCP Server (for Claude-based agents)
@@ -192,11 +192,11 @@ All SVI values are **national percentiles (0-1)**. Higher = more vulnerable.
 
 | Field | Interpretation |
 |-------|---------------|
-| svi_themes.socioeconomic_status | Poverty + unemployment + no insurance + no diploma + housing cost burden |
-| svi_themes.household_disability | Aged 65+ / under 17 / disabled / single-parent households |
-| svi_themes.minority_status | Racial/ethnic minorities + limited English proficiency |
-| svi_themes.housing_transportation | Multi-unit / mobile homes / crowding / no vehicle / group quarters |
-| svi_themes.overall | Composite across all 4 themes |
+| svi_themes.rpl_theme1 | Socioeconomic status: poverty + unemployment + no insurance + no diploma + housing cost burden |
+| svi_themes.rpl_theme2 | Household composition & disability: aged 65+ / under 17 / disabled / single-parent households |
+| svi_themes.rpl_theme3 | Minority status & language: racial/ethnic minorities + limited English proficiency |
+| svi_themes.rpl_theme4 | Housing type & transportation: multi-unit / mobile homes / crowding / no vehicle / group quarters |
+| svi_themes.rpl_themes | Overall composite across all 4 themes |
 
 **Clinical rule of thumb**: SVI percentile above **0.75** = top 25% most vulnerable nationally.
 These communities need intensive social needs screening and care coordination.
@@ -210,18 +210,18 @@ Behavioral Risk Factor Surveillance System (BRFSS) model-based estimates.
 |-------|-----------------|----------------------|
 | places_measures.diabetes | Diagnosed diabetes | >12% |
 | places_measures.obesity | BMI >= 30 | >35% |
-| places_measures.mental_health | 14+ days mental distress/month | >16% |
-| places_measures.physical_health | 14+ days physical distress/month | >15% |
-| places_measures.high_blood_pressure | Hypertension | >35% |
-| places_measures.asthma | Current asthma | >10% |
-| places_measures.coronary_heart_disease | CHD | >7% |
-| places_measures.smoking | Current smoking | >20% |
-| places_measures.lack_of_insurance | No health insurance (18-64) | >15% |
+| places_measures.mhlth | 14+ days mental distress/month | >16% |
+| places_measures.phlth | 14+ days physical distress/month | >15% |
+| places_measures.bphigh | Hypertension (high blood pressure) | >35% |
+| places_measures.casthma | Current asthma | >10% |
+| places_measures.chd | Coronary heart disease | >7% |
+| places_measures.csmoking | Current smoking | >20% |
+| places_measures.access2 | No health insurance (18-64) | >15% |
 | places_measures.checkup | Annual checkup | <65% (low is bad) |
 | places_measures.dental | Annual dental visit | <55% (low is bad) |
-| places_measures.sleep_lt7 | Short sleep (<7 hours) | >38% |
-| places_measures.physical_inactivity | No leisure-time exercise | >30% |
-| places_measures.binge_drinking | Binge drinking | >20% |
+| places_measures.sleep | Short sleep (<7 hours) | >38% |
+| places_measures.lpa | No leisure-time physical activity | >30% |
+| places_measures.binge | Binge drinking | >20% |
 
 ### Composite Index
 

@@ -147,8 +147,9 @@ class TractDataModel(BaseModel):
         None,
         description=(
             "CDC/ATSDR Social Vulnerability Index theme percentile rankings (0-1). "
-            "Keys: socioeconomic_status, household_disability, minority_status, "
-            "housing_transportation, overall. Percentiles above 0.75 indicate high "
+            "Keys: rpl_theme1 (socioeconomic), rpl_theme2 (household/disability), "
+            "rpl_theme3 (minority/language), rpl_theme4 (housing/transportation), "
+            "rpl_themes (overall). Percentiles above 0.75 indicate high "
             "vulnerability relative to all US census tracts."
         ),
     )
@@ -156,10 +157,11 @@ class TractDataModel(BaseModel):
         None,
         description=(
             "CDC PLACES health outcome measures (crude prevalence %). Model-based "
-            "estimates from BRFSS. Keys: diabetes, obesity, mental_health, "
-            "physical_health, high_blood_pressure, asthma, coronary_heart_disease, "
-            "smoking, lack_of_insurance, checkup, dental, sleep_lt7, "
-            "physical_inactivity, binge_drinking."
+            "estimates from BRFSS. Keys: diabetes, obesity, mhlth (mental health), "
+            "phlth (physical health), bphigh (blood pressure), casthma (asthma), "
+            "chd (coronary heart disease), csmoking (smoking), access2 (no insurance), "
+            "checkup, dental, sleep (short sleep), lpa (physical inactivity), "
+            "binge (binge drinking)."
         ),
     )
     sdoh_index: float | None = Field(
@@ -188,19 +190,20 @@ class TractDataModel(BaseModel):
                     "unemployment_rate": 4.2,
                     "median_age": 34.7,
                     "svi_themes": {
-                        "socioeconomic_status": 0.35,
-                        "household_disability": 0.42,
-                        "minority_status": 0.61,
-                        "housing_transportation": 0.28,
+                        "rpl_theme1": 0.35,
+                        "rpl_theme2": 0.42,
+                        "rpl_theme3": 0.61,
+                        "rpl_theme4": 0.28,
+                        "rpl_themes": 0.44,
                     },
                     "places_measures": {
                         "diabetes": 9.1,
                         "obesity": 28.4,
-                        "mental_health": 14.7,
-                        "physical_inactivity": 22.3,
-                        "smoking": 15.1,
-                        "binge_drinking": 18.6,
-                        "sleep_lt7": 35.2,
+                        "mhlth": 14.7,
+                        "lpa": 22.3,
+                        "csmoking": 15.1,
+                        "binge": 18.6,
+                        "sleep": 35.2,
                     },
                     "sdoh_index": 0.41,
                 }

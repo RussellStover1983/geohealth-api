@@ -121,7 +121,7 @@ _DEMOGRAPHICS_FIELDS: list[FieldDefinition] = [
 
 _VULNERABILITY_FIELDS: list[FieldDefinition] = [
     FieldDefinition(
-        name="svi_themes.socioeconomic_status",
+        name="svi_themes.rpl_theme1",
         type="float",
         source="SVI",
         category="vulnerability",
@@ -141,7 +141,7 @@ _VULNERABILITY_FIELDS: list[FieldDefinition] = [
         example_value=0.35,
     ),
     FieldDefinition(
-        name="svi_themes.household_disability",
+        name="svi_themes.rpl_theme2",
         type="float",
         source="SVI",
         category="vulnerability",
@@ -161,7 +161,7 @@ _VULNERABILITY_FIELDS: list[FieldDefinition] = [
         example_value=0.42,
     ),
     FieldDefinition(
-        name="svi_themes.minority_status",
+        name="svi_themes.rpl_theme3",
         type="float",
         source="SVI",
         category="vulnerability",
@@ -180,7 +180,7 @@ _VULNERABILITY_FIELDS: list[FieldDefinition] = [
         example_value=0.61,
     ),
     FieldDefinition(
-        name="svi_themes.housing_transportation",
+        name="svi_themes.rpl_theme4",
         type="float",
         source="SVI",
         category="vulnerability",
@@ -200,7 +200,7 @@ _VULNERABILITY_FIELDS: list[FieldDefinition] = [
         example_value=0.28,
     ),
     FieldDefinition(
-        name="svi_themes.overall",
+        name="svi_themes.rpl_themes",
         type="float",
         source="SVI",
         category="vulnerability",
@@ -254,7 +254,7 @@ _HEALTH_OUTCOME_FIELDS: list[FieldDefinition] = [
         example_value=28.4,
     ),
     FieldDefinition(
-        name="places_measures.mental_health",
+        name="places_measures.mhlth",
         type="float",
         source="PLACES",
         category="health_outcomes",
@@ -273,7 +273,7 @@ _HEALTH_OUTCOME_FIELDS: list[FieldDefinition] = [
         example_value=14.7,
     ),
     FieldDefinition(
-        name="places_measures.physical_health",
+        name="places_measures.phlth",
         type="float",
         source="PLACES",
         category="health_outcomes",
@@ -291,7 +291,7 @@ _HEALTH_OUTCOME_FIELDS: list[FieldDefinition] = [
         example_value=11.2,
     ),
     FieldDefinition(
-        name="places_measures.high_blood_pressure",
+        name="places_measures.bphigh",
         type="float",
         source="PLACES",
         category="health_outcomes",
@@ -308,7 +308,7 @@ _HEALTH_OUTCOME_FIELDS: list[FieldDefinition] = [
         example_value=29.8,
     ),
     FieldDefinition(
-        name="places_measures.asthma",
+        name="places_measures.casthma",
         type="float",
         source="PLACES",
         category="health_outcomes",
@@ -323,7 +323,7 @@ _HEALTH_OUTCOME_FIELDS: list[FieldDefinition] = [
         example_value=9.4,
     ),
     FieldDefinition(
-        name="places_measures.coronary_heart_disease",
+        name="places_measures.chd",
         type="float",
         source="PLACES",
         category="health_outcomes",
@@ -338,7 +338,7 @@ _HEALTH_OUTCOME_FIELDS: list[FieldDefinition] = [
         example_value=5.7,
     ),
     FieldDefinition(
-        name="places_measures.smoking",
+        name="places_measures.csmoking",
         type="float",
         source="PLACES",
         category="health_outcomes",
@@ -354,7 +354,7 @@ _HEALTH_OUTCOME_FIELDS: list[FieldDefinition] = [
         example_value=15.1,
     ),
     FieldDefinition(
-        name="places_measures.lack_of_insurance",
+        name="places_measures.access2",
         type="float",
         source="PLACES",
         category="health_outcomes",
@@ -408,7 +408,7 @@ _HEALTH_OUTCOME_FIELDS: list[FieldDefinition] = [
         example_value=61.3,
     ),
     FieldDefinition(
-        name="places_measures.sleep_lt7",
+        name="places_measures.sleep",
         type="float",
         source="PLACES",
         category="health_outcomes",
@@ -427,7 +427,7 @@ _HEALTH_OUTCOME_FIELDS: list[FieldDefinition] = [
         example_value=35.2,
     ),
     FieldDefinition(
-        name="places_measures.physical_inactivity",
+        name="places_measures.lpa",
         type="float",
         source="PLACES",
         category="health_outcomes",
@@ -446,7 +446,7 @@ _HEALTH_OUTCOME_FIELDS: list[FieldDefinition] = [
         example_value=22.3,
     ),
     FieldDefinition(
-        name="places_measures.binge_drinking",
+        name="places_measures.binge",
         type="float",
         source="PLACES",
         category="health_outcomes",
