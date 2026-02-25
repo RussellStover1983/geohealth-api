@@ -18,7 +18,7 @@ uvicorn geohealth.api.main:app --reload
 docker compose up --build
 
 # Tests — no live DB required, everything is mocked
-pytest                             # All 91 tests
+pytest                             # All 167 tests
 pytest tests/test_context.py -v    # Single module
 pytest -k test_auth                # Pattern match
 
@@ -28,6 +28,7 @@ ruff check geohealth/ tests/      # line-length=99, target py311
 # Install
 pip install -e ".[dev]"           # Core + test deps
 pip install -e ".[dev,etl]"       # Include ETL deps (geopandas, shapely, etc.)
+pip install -e ".[mcp]"          # MCP server for Claude agents
 
 # Data loading
 python -m geohealth.etl.load_all --state 27         # Single state
@@ -134,6 +135,29 @@ Existing fixed ACS columns (`poverty_rate`, etc.) stay as-is for backward compat
 
 **Enhanced `/health`**: Returns cache size/hit-rate, rate limiter active keys, and uptime when healthy. Degraded response stays unchanged for backward compatibility.
 
+### MCP Server (Agent Integration)
+
+The `geohealth/mcp/` package wraps every API endpoint as native tools for Claude Desktop, Claude Code, and other MCP-compatible agents. Built with the `mcp` Python SDK (FastMCP).
+
+```
+geohealth/mcp/
+├── __init__.py      # Lazy import of mcp server instance
+├── server.py        # FastMCP tool definitions + lifespan
+└── __main__.py      # python -m geohealth.mcp entry point
+```
+
+The MCP server calls the deployed API via `AsyncGeoHealthClient` (the existing SDK) — it does not access the database directly. Credentials come from `GEOHEALTH_BASE_URL` and `GEOHEALTH_API_KEY` env vars. Six tools: `lookup_health_context`, `batch_health_lookup`, `find_nearby_tracts`, `compare_tracts`, `get_data_dictionary`, `get_tract_statistics`.
+
+The `mcp` dependency is optional (`pip install -e ".[mcp]"`). Tests use `pytest.importorskip` to skip MCP tests when the package isn't installed.
+
+### Agent Discoverability
+
+- **`/llms.txt`** — Concise agent-readable API overview (llmstxt.org standard)
+- **`/llms-full.txt`** — Full reference with clinical context, field definitions, SDK examples, and MCP setup
+- **`/v1/dictionary`** — Structured data dictionary endpoint with clinical interpretation guidance per field
+
+Content is defined in `geohealth/api/llms_content.py` (string constants) and `geohealth/api/routes/dictionary.py` (static field definitions). The dictionary requires auth; the llms.txt files are public.
+
 ### Deployment
 
 The API deploys to **Railway** using the existing multi-stage Dockerfile. Railway configuration lives in `railway.toml`. The Dockerfile CMD uses shell form with `${PORT:-8000}` so Railway can inject its dynamic port while local `docker compose` falls back to 8000. PostGIS runs as a custom Docker service on Railway (their managed Postgres lacks PostGIS binaries). See the README's "Deployment (Railway)" section for full setup instructions.
@@ -158,8 +182,11 @@ Tests use **no live database** — everything is mocked via `unittest.mock` (`As
 | POST | `/v1/batch` | Yes | Multi-address lookup (up to `BATCH_MAX_SIZE`) |
 | GET | `/v1/nearby` | Yes | Spatial radius search — tracts within N miles |
 | GET | `/v1/compare` | Yes | Compare two tracts or tract vs averages |
+| GET | `/v1/dictionary` | Yes | Data dictionary — field definitions with clinical context |
 | GET | `/v1/stats` | Yes | Per-state tract counts |
 | GET | `/metrics` | No | Application metrics (counters, latency percentiles, cache stats) |
+| GET | `/llms.txt` | No | Agent-readable API overview (llmstxt.org) |
+| GET | `/llms-full.txt` | No | Full agent-readable reference with clinical context |
 
 ## Key Configuration (env vars / .env)
 

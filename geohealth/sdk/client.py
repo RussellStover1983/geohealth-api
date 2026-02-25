@@ -10,6 +10,7 @@ from geohealth.api.schemas import (
     BatchResponse,
     CompareResponse,
     ContextResponse,
+    DictionaryResponse,
     HealthResponse,
     NearbyResponse,
     StatsResponse,
@@ -185,6 +186,18 @@ class AsyncGeoHealthClient:
         self._handle_response(resp)
         return StatsResponse.model_validate(resp.json())
 
+    async def dictionary(
+        self,
+        *,
+        category: str | None = None,
+    ) -> DictionaryResponse:
+        params: dict[str, Any] = {}
+        if category is not None:
+            params["category"] = category
+        resp = await self._client.get("/v1/dictionary", params=params)
+        self._handle_response(resp)
+        return DictionaryResponse.model_validate(resp.json())
+
 
 # ---------------------------------------------------------------------------
 # Sync client
@@ -315,3 +328,15 @@ class GeoHealthClient:
         resp = self._client.get("/v1/stats", params=params)
         self._handle_response(resp)
         return StatsResponse.model_validate(resp.json())
+
+    def dictionary(
+        self,
+        *,
+        category: str | None = None,
+    ) -> DictionaryResponse:
+        params: dict[str, Any] = {}
+        if category is not None:
+            params["category"] = category
+        resp = self._client.get("/v1/dictionary", params=params)
+        self._handle_response(resp)
+        return DictionaryResponse.model_validate(resp.json())

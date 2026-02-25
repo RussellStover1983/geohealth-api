@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -21,8 +21,10 @@ from geohealth.api.middleware import RequestLoggingMiddleware
 from geohealth.api.routes.batch import router as batch_router
 from geohealth.api.routes.compare import router as compare_router
 from geohealth.api.routes.context import router as context_router
+from geohealth.api.routes.dictionary import router as dictionary_router
 from geohealth.api.routes.nearby import router as nearby_router
 from geohealth.api.routes.stats import router as stats_router
+from geohealth.api.llms_content import LLMS_FULL_TXT, LLMS_TXT
 from geohealth.api.schemas import ErrorResponse, HealthResponse
 from geohealth.config import settings
 from geohealth.db.session import engine
@@ -101,6 +103,14 @@ _OPENAPI_TAGS = [
             "and per-state breakdowns."
         ),
     },
+    {
+        "name": "dictionary",
+        "description": (
+            "Data dictionary — structured metadata about every field "
+            "the API returns, including data type, source, clinical "
+            "relevance, and interpretation guidance."
+        ),
+    },
 ]
 
 
@@ -154,6 +164,7 @@ app.include_router(stats_router)
 app.include_router(batch_router)
 app.include_router(nearby_router)
 app.include_router(compare_router)
+app.include_router(dictionary_router)
 
 
 @app.get(
@@ -209,3 +220,35 @@ async def get_metrics():
     snap["cache"]["max_size"] = settings.cache_maxsize
     snap["rate_limiter"] = {"active_keys": len(rate_limiter._buckets)}
     return snap
+
+
+# ---------------------------------------------------------------------------
+# llms.txt — agent-readable documentation (llmstxt.org standard)
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/llms.txt",
+    tags=["system"],
+    summary="Agent-readable API overview (llmstxt.org)",
+    description="Concise plain-text documentation for LLMs and coding agents.",
+    response_class=PlainTextResponse,
+)
+async def llms_txt():
+    """Return concise agent-readable documentation."""
+    return PlainTextResponse(content=LLMS_TXT, media_type="text/plain; charset=utf-8")
+
+
+@app.get(
+    "/llms-full.txt",
+    tags=["system"],
+    summary="Full agent-readable API reference (llmstxt.org)",
+    description="Complete plain-text documentation with clinical context, "
+    "field reference, SDK examples, and MCP setup instructions.",
+    response_class=PlainTextResponse,
+)
+async def llms_full_txt():
+    """Return full agent-readable documentation with clinical context."""
+    return PlainTextResponse(
+        content=LLMS_FULL_TXT, media_type="text/plain; charset=utf-8",
+    )

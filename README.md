@@ -79,8 +79,11 @@ Keys can be provided as plaintext or as pre-hashed SHA-256 hex strings. The API 
 | POST | `/v1/batch` | Yes | Batch address lookup (up to `BATCH_MAX_SIZE`) |
 | GET | `/v1/nearby` | Yes | Find census tracts within a radius |
 | GET | `/v1/compare` | Yes | Compare two tracts or tract vs. averages |
+| GET | `/v1/dictionary` | Yes | Data dictionary — field definitions with clinical context |
 | GET | `/v1/stats` | Yes | Per-state data loading statistics |
 | GET | `/metrics` | No | Application metrics (counters, latency, cache stats) |
+| GET | `/llms.txt` | No | Agent-readable API overview ([llmstxt.org](https://llmstxt.org)) |
+| GET | `/llms-full.txt` | No | Full agent-readable reference with clinical context |
 
 ## Example Requests
 
@@ -172,6 +175,47 @@ async with AsyncGeoHealthClient("http://localhost:8000", api_key="your-key") as 
     except AuthenticationError as exc:
         print(f"Auth failed: {exc.detail}")
 ```
+
+## MCP Server (for Claude Agents)
+
+The GeoHealth MCP server exposes all API endpoints as native tools for Claude Desktop, Claude Code, and other MCP-compatible agents. No HTTP wiring needed — agents call tools directly.
+
+### Install and run
+
+```bash
+pip install geohealth-api[mcp]
+GEOHEALTH_API_KEY=your-key python -m geohealth.mcp
+```
+
+### Claude Desktop configuration
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "geohealth": {
+      "command": "python",
+      "args": ["-m", "geohealth.mcp"],
+      "env": {
+        "GEOHEALTH_BASE_URL": "https://geohealth-api-production.up.railway.app",
+        "GEOHEALTH_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+### Available tools
+
+| Tool | Description |
+|------|-------------|
+| `lookup_health_context` | Primary lookup — address/coords to tract demographics, SVI, PLACES |
+| `batch_health_lookup` | Multi-address lookup (up to 50) |
+| `find_nearby_tracts` | Spatial radius search |
+| `compare_tracts` | Compare tracts or tract vs averages |
+| `get_data_dictionary` | Field definitions with clinical interpretation |
+| `get_tract_statistics` | Data coverage by state |
 
 ## Rate Limiting
 

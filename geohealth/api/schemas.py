@@ -100,42 +100,75 @@ class TractDataModel(BaseModel):
         None, description="Human-readable tract name"
     )
     total_population: int | None = Field(
-        None, description="ACS total population estimate"
+        None,
+        description=(
+            "ACS total population estimate. Small populations (under 1,000) "
+            "produce less reliable rate estimates."
+        ),
     )
     median_household_income: float | None = Field(
-        None, description="ACS median household income in dollars"
+        None,
+        description=(
+            "ACS median household income in dollars. Incomes below $30,000 "
+            "correlate with higher chronic disease rates and delayed care-seeking."
+        ),
     )
     poverty_rate: float | None = Field(
-        None, description="Percentage of population below poverty line"
+        None,
+        description=(
+            "Percentage of population below the federal poverty level (ACS). "
+            "Rates above 20% indicate high-poverty areas associated with increased "
+            "chronic disease burden and reduced healthcare access."
+        ),
     )
     uninsured_rate: float | None = Field(
-        None, description="Percentage of population without health insurance"
+        None,
+        description=(
+            "Percentage of population without health insurance (ACS). Rates above "
+            "15% suggest significant access barriers and delayed preventive care."
+        ),
     )
     unemployment_rate: float | None = Field(
-        None, description="Percentage of civilian labor force unemployed"
+        None,
+        description=(
+            "Percentage of civilian labor force unemployed (ACS). Rates above 10% "
+            "indicate economic distress, associated with depression and substance use."
+        ),
     )
     median_age: float | None = Field(
-        None, description="Median age of the population"
+        None,
+        description=(
+            "Median age of the population (ACS). Tracts above 45 may have higher "
+            "chronic disease prevalence; tracts below 25 may indicate student "
+            "populations."
+        ),
     )
     svi_themes: dict | None = Field(
         None,
         description=(
-            "CDC/ATSDR Social Vulnerability Index theme percentile rankings. "
-            "Keys: socioeconomic_status, household_disability, "
-            "minority_status, housing_transportation"
+            "CDC/ATSDR Social Vulnerability Index theme percentile rankings (0-1). "
+            "Keys: socioeconomic_status, household_disability, minority_status, "
+            "housing_transportation, overall. Percentiles above 0.75 indicate high "
+            "vulnerability relative to all US census tracts."
         ),
     )
     places_measures: dict | None = Field(
         None,
         description=(
-            "CDC PLACES health outcome measures (crude prevalence %). "
-            "Keys include: diabetes, obesity, mental_health, "
-            "physical_inactivity, smoking, binge_drinking, sleep_lt7, etc."
+            "CDC PLACES health outcome measures (crude prevalence %). Model-based "
+            "estimates from BRFSS. Keys: diabetes, obesity, mental_health, "
+            "physical_health, high_blood_pressure, asthma, coronary_heart_disease, "
+            "smoking, lack_of_insurance, checkup, dental, sleep_lt7, "
+            "physical_inactivity, binge_drinking."
         ),
     )
     sdoh_index: float | None = Field(
         None,
-        description="Composite social determinants of health index (0-1 scale)",
+        description=(
+            "Composite social determinants of health index (0-1 scale). Computed "
+            "from poverty, uninsured, unemployment rates and SVI. Values above 0.6 "
+            "indicate high social vulnerability warranting intensive care coordination."
+        ),
     )
 
     model_config = {
@@ -276,22 +309,42 @@ class NearbyTract(BaseModel):
         None, description="ACS total population estimate"
     )
     median_household_income: float | None = Field(
-        None, description="ACS median household income in dollars"
+        None,
+        description=(
+            "ACS median household income in dollars. Below $30,000 correlates "
+            "with higher chronic disease rates."
+        ),
     )
     poverty_rate: float | None = Field(
-        None, description="Percentage below poverty line"
+        None,
+        description=(
+            "Percentage below federal poverty level (ACS). Above 20% indicates "
+            "high-poverty area."
+        ),
     )
     uninsured_rate: float | None = Field(
-        None, description="Percentage without health insurance"
+        None,
+        description=(
+            "Percentage without health insurance (ACS). Above 15% suggests "
+            "significant access barriers."
+        ),
     )
     unemployment_rate: float | None = Field(
-        None, description="Percentage of labor force unemployed"
+        None,
+        description=(
+            "Percentage of labor force unemployed (ACS). Above 10% indicates "
+            "economic distress."
+        ),
     )
     median_age: float | None = Field(
-        None, description="Median age of the population"
+        None, description="Median age of the population (ACS)"
     )
     sdoh_index: float | None = Field(
-        None, description="Composite SDOH index (0-1 scale)"
+        None,
+        description=(
+            "Composite SDOH index (0-1). Above 0.6 indicates high social "
+            "vulnerability."
+        ),
     )
 
 
@@ -333,22 +386,27 @@ class CompareValues(BaseModel):
         None, description="Total population (or average)"
     )
     median_household_income: float | None = Field(
-        None, description="Median household income in dollars"
+        None,
+        description="Median household income in dollars. Below $30,000 = high risk.",
     )
     poverty_rate: float | None = Field(
-        None, description="Poverty rate percentage"
+        None,
+        description="Poverty rate %. Above 20% = high-poverty area.",
     )
     uninsured_rate: float | None = Field(
-        None, description="Uninsured rate percentage"
+        None,
+        description="Uninsured rate %. Above 15% = significant access barriers.",
     )
     unemployment_rate: float | None = Field(
-        None, description="Unemployment rate percentage"
+        None,
+        description="Unemployment rate %. Above 10% = economic distress.",
     )
     median_age: float | None = Field(
-        None, description="Median age"
+        None, description="Median age of the population"
     )
     sdoh_index: float | None = Field(
-        None, description="Composite SDOH index (0-1 scale)"
+        None,
+        description="Composite SDOH index (0-1). Above 0.6 = high vulnerability.",
     )
 
 
@@ -439,4 +497,59 @@ class StatsResponse(BaseModel):
     )
     states: list[StateCount] = Field(
         ..., description="Per-state tract counts"
+    )
+
+
+# ---------------------------------------------------------------------------
+# /v1/dictionary
+# ---------------------------------------------------------------------------
+
+
+class FieldDefinition(BaseModel):
+    """Metadata about a single data field returned by the API."""
+
+    name: str = Field(..., description="Field name as it appears in API responses")
+    type: str = Field(..., description="Data type: float, int, str, dict")
+    source: str = Field(
+        ..., description="Data source: ACS, SVI, PLACES, computed, census"
+    )
+    category: str = Field(
+        ...,
+        description=(
+            "Category: identity, demographics, vulnerability, "
+            "health_outcomes, composite"
+        ),
+    )
+    description: str = Field(..., description="What this field measures")
+    clinical_relevance: str = Field(
+        ..., description="Why this matters for clinical or public-health decisions"
+    )
+    unit: str | None = Field(
+        None, description="Unit of measurement (%, dollars, years, 0-1 scale)"
+    )
+    typical_range: str | None = Field(
+        None, description="Typical range of values"
+    )
+    example_value: float | str | None = Field(
+        None, description="Example value"
+    )
+
+
+class DictionaryCategory(BaseModel):
+    """A group of related fields."""
+
+    category: str = Field(..., description="Category name")
+    description: str = Field(..., description="What this category covers")
+    source: str = Field(..., description="Primary data source for this category")
+    fields: list[FieldDefinition] = Field(
+        ..., description="Fields in this category"
+    )
+
+
+class DictionaryResponse(BaseModel):
+    """Complete data dictionary with field definitions and clinical context."""
+
+    total_fields: int = Field(..., description="Total number of defined fields")
+    categories: list[DictionaryCategory] = Field(
+        ..., description="Fields grouped by category"
     )
