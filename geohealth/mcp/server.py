@@ -1,4 +1,4 @@
-"""FastMCP server wrapping the GeoHealth API as tools for Claude agents."""
+"""FastMCP server wrapping the GeoHealth API as tools for AI agents."""
 
 from __future__ import annotations
 

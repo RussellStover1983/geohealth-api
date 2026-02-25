@@ -34,7 +34,7 @@ LLMS_TXT = """\
 - **Health Outcomes (PLACES)**: diabetes, obesity, mhlth (mental health), phlth (physical health), bphigh (high blood pressure), csmoking (smoking), casthma (asthma), chd (coronary heart disease), lpa (physical inactivity), binge (binge drinking), sleep (short sleep), checkup, dental, access2 (no insurance) — all as crude prevalence %
 - **Composite**: sdoh_index (0-1 scale, higher = more vulnerable)
 
-## MCP Server (for Claude-based agents)
+## MCP Server (for AI Agents)
 
 ```bash
 pip install geohealth-api[mcp]
@@ -259,7 +259,7 @@ async with AsyncGeoHealthClient(
             print(f"{field.name}: {field.clinical_relevance}")
 ```
 
-## MCP Server (for Claude-based Agents)
+## MCP Server (for AI Agents)
 
 The GeoHealth MCP server exposes all API endpoints as native tools for
 Claude Desktop, Claude Code, and other MCP-compatible agents.

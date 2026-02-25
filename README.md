@@ -176,7 +176,7 @@ async with AsyncGeoHealthClient("http://localhost:8000", api_key="your-key") as 
         print(f"Auth failed: {exc.detail}")
 ```
 
-## MCP Server (for Claude Agents)
+## MCP Server (for AI Agents)
 
 The GeoHealth MCP server exposes all API endpoints as native tools for Claude Desktop, Claude Code, and other MCP-compatible agents. No HTTP wiring needed — agents call tools directly.
 

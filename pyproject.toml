@@ -3,7 +3,23 @@ name = "geohealth-api"
 version = "0.1.0"
 description = "Geographic Health Intelligence API — census-tract-level social determinants of health"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+authors = [{name = "Russell Stover"}]
+keywords = [
+    "census", "demographics", "health", "sdoh", "social-determinants",
+    "gis", "census-tract", "svi", "places", "mcp",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Healthcare Industry",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110,<1",
@@ -35,6 +51,12 @@ dev = [
 mcp = [
     "mcp>=1.0,<2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/RussellStover1983/geohealth-api"
+Repository = "https://github.com/RussellStover1983/geohealth-api"
+Documentation = "https://geohealth-api-production.up.railway.app/docs"
+Issues = "https://github.com/RussellStover1983/geohealth-api/issues"
 
 [build-system]
 requires = ["setuptools>=68"]
