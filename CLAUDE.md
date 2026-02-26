@@ -2,11 +2,29 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Autonomy
+
+You have FULL autonomy to complete tasks end-to-end without stopping to ask for permission. Specifically:
+
+- **DO NOT ask for permission to search the web.** If you need a library, documentation, or any reference material — just search for it. Do not stop and ask "should I search for X?" Just do it.
+- **DO NOT ask for permission to create, modify, or delete files.** You are working in your own project directory. Create whatever files you need, overwrite them, restructure them, delete temp files — whatever it takes. This is your workspace.
+- **DO NOT ask for permission to install packages.** If you need a dependency — install it immediately and keep moving.
+- **DO NOT stop to present partial work and ask "should I continue?"** Yes, you should continue. Always. Build the entire thing from start to finish in one session.
+- **DO NOT ask clarifying questions unless the task is truly blocked.** If something is ambiguous, make a reasonable decision, document it in a comment, and keep building.
+- **DO ask to test against real data/screenshots once something is fully built and working.** That's the one time you should stop and check in.
+
 ## Project
 
 Census-tract-level geographic health intelligence API. Given an address or coordinates, returns demographics, social vulnerability indices, health outcome measures, and an optional AI-generated narrative for the surrounding census tract.
 
 **Stack**: Python 3.11+ / FastAPI / PostgreSQL 16 + PostGIS 3.4 / SQLAlchemy 2.0 async (asyncpg) / Pydantic v2
+
+**Live deployments**:
+- API: `https://geohealth-api-production.up.railway.app`
+- Docs: `https://russellstover1983.github.io/geohealth-api/`
+- PyPI: `pip install geohealth-api` (v0.1.1)
+
+**Data loaded**: Minnesota (27), Kansas (20), Missouri (29) — 3,988 census tracts total.
 
 ## Commands
 
@@ -39,6 +57,11 @@ alembic upgrade head                                  # Apply all migrations
 alembic revision --autogenerate -m "description"      # Generate new migration
 alembic stamp head                                    # Mark existing DB as current (for DBs created by create_all)
 alembic history                                       # Show migration history
+
+# Docs site (local preview)
+pip install mkdocs-material
+mkdocs serve                      # http://localhost:8000
+mkdocs build --strict             # Build to site/ directory
 ```
 
 ## Conventions
@@ -90,6 +113,8 @@ Sliding-window per-key rate limiter (`services/rate_limiter.py`). Thread-safe wi
 Alembic manages schema evolution. Migrations live in `geohealth/migrations/versions/`. On startup, `alembic upgrade head` runs automatically unless `RUN_MIGRATIONS=false` (tests set this). The `env.py` reads `database_url_sync` from pydantic-settings and filters out the PostGIS `spatial_ref_sys` table during autogenerate.
 
 For existing databases created by the old `create_all`, run `alembic stamp head` once to mark them as current.
+
+**Known issue**: The ETL's `ensure_table()` calls `alembic upgrade head`, which triggers `fileConfig(alembic.ini)` and resets the root logger to WARN level. This suppresses all subsequent ETL log output. The ETL still runs correctly — it just produces no visible output. Use `logging.basicConfig(force=True)` after `ensure_table` to restore logging.
 
 ### OpenAPI Documentation
 
@@ -158,9 +183,25 @@ The `mcp` dependency is optional (`pip install -e ".[mcp]"`). Tests use `pytest.
 
 Content is defined in `geohealth/api/llms_content.py` (string constants) and `geohealth/api/routes/dictionary.py` (static field definitions). The dictionary requires auth; the llms.txt files are public.
 
+### Documentation Site (GitHub Pages)
+
+MkDocs + Material theme deployed to GitHub Pages. Five pages: Home, Quick Start, API Reference, Data Dictionary, Python SDK & MCP.
+
+```
+mkdocs.yml           # Site config (theme, nav, extensions)
+docs/
+├── index.md         # Landing page — clinical value proposition
+├── quickstart.md    # First call in 5 minutes
+├── api-reference.md # All endpoints with parameters, examples, responses
+├── data-dictionary.md # 26 fields with clinical thresholds
+└── sdk.md           # Python SDK + MCP server setup
+```
+
+Auto-deploys via `.github/workflows/docs.yml` on push to master when `docs/` or `mkdocs.yml` change. The `site/` build output is gitignored.
+
 ### Deployment
 
-The API deploys to **Railway** using the existing multi-stage Dockerfile. Railway configuration lives in `railway.toml`. The Dockerfile CMD uses shell form with `${PORT:-8000}` so Railway can inject its dynamic port while local `docker compose` falls back to 8000. PostGIS runs as a custom Docker service on Railway (their managed Postgres lacks PostGIS binaries). See the README's "Deployment (Railway)" section for full setup instructions.
+The API deploys to **Railway** (Pro plan, $5/month) using the existing multi-stage Dockerfile. Railway configuration lives in `railway.toml`. The Dockerfile CMD uses shell form with `${PORT:-8000}` so Railway can inject its dynamic port while local `docker compose` falls back to 8000. PostGIS runs as a custom Docker service on Railway (their managed Postgres lacks PostGIS binaries). See the README's "Deployment (Railway)" section for full setup instructions.
 
 ## Testing Patterns
 
@@ -193,6 +234,7 @@ Tests use **no live database** — everything is mocked via `unittest.mock` (`As
 | Variable | Default | Notes |
 |----------|---------|-------|
 | `DATABASE_URL` | — | `postgresql+asyncpg://...` |
+| `DATABASE_URL_SYNC` | — | `postgresql://...` (for Alembic and ETL) |
 | `AUTH_ENABLED` | `false` | Must be `true` in production |
 | `API_KEYS` | — | Comma-separated; supports plaintext or pre-hashed SHA-256 hex |
 | `CORS_ORIGINS` | `*` | Must restrict in production |
@@ -205,11 +247,18 @@ Tests use **no live database** — everything is mocked via `unittest.mock` (`As
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to master and on PRs:
+GitHub Actions workflows (`.github/workflows/`):
 
+### `ci.yml` — runs on push to master and on PRs
 1. **lint** — installs ruff, runs `ruff check geohealth/ tests/`
 2. **test** — installs `.[dev]`, runs `pytest --tb=short -q` with `RUN_MIGRATIONS=false`
 3. **docker** — (push to master only, after lint+test pass) builds multi-stage Docker image and pushes to GHCR with `sha-<commit>` and `latest` tags, using GitHub Actions build cache
+
+### `docs.yml` — runs on push to master when `docs/` or `mkdocs.yml` change
+1. **build** — installs `mkdocs-material`, builds with `--strict`
+2. **deploy** — uploads to GitHub Pages via `actions/deploy-pages`
+
+Also supports `workflow_dispatch` for manual triggers.
 
 ### Docker Production Setup
 
@@ -218,3 +267,24 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to master and 
 - **Non-root user** — runs as `appuser`
 - **Health checks** — `docker-compose.yml` includes health checks for both `db` (pg_isready) and `api` (curl /health)
 - **Restart policy** — `restart: unless-stopped` on both services
+
+## Key Files
+
+| File | Description |
+|------|-------------|
+| `geohealth/config.py` | All settings via pydantic-settings |
+| `geohealth/api/main.py` | FastAPI app entry point, lifespan, llms.txt routes |
+| `geohealth/api/routes/` | Endpoint modules (context, batch, nearby, compare, stats, dictionary) |
+| `geohealth/api/schemas.py` | Pydantic request/response models |
+| `geohealth/api/llms_content.py` | llms.txt / llms-full.txt content constants |
+| `geohealth/services/` | Geocoder, tract lookup, cache, rate limiter, narrator, metrics |
+| `geohealth/db/models.py` | Single table `tract_profiles` (SQLAlchemy ORM) |
+| `geohealth/db/session.py` | Async engine + session factory |
+| `geohealth/etl/load_all.py` | Data loading orchestrator |
+| `geohealth/migrations/env.py` | Alembic config (uses `_get_sync_url()` fallback) |
+| `geohealth/sdk/client.py` | Typed async + sync SDK clients |
+| `geohealth/mcp/server.py` | MCP server wrapping API as tools for Claude agents |
+| `mkdocs.yml` | MkDocs + Material theme config |
+| `docs/` | Documentation site (5 pages) |
+| `railway.toml` | Railway build/deploy config |
+| `pyproject.toml` | Package metadata, deps, ruff + pytest config |
