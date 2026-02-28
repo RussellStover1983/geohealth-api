@@ -10,10 +10,14 @@ from geohealth.api.schemas import (
     BatchResponse,
     CompareResponse,
     ContextResponse,
+    DemographicCompareResponse,
     DictionaryResponse,
     HealthResponse,
     NearbyResponse,
     StatsResponse,
+    TrendsResponse,
+    WebhookListResponse,
+    WebhookResponse,
 )
 from geohealth.sdk.exceptions import (
     AuthenticationError,
@@ -198,6 +202,44 @@ class AsyncGeoHealthClient:
         self._handle_response(resp)
         return DictionaryResponse.model_validate(resp.json())
 
+    async def trends(self, *, geoid: str) -> TrendsResponse:
+        resp = await self._client.get("/v1/trends", params={"geoid": geoid})
+        self._handle_response(resp)
+        return TrendsResponse.model_validate(resp.json())
+
+    async def demographics_compare(self, *, geoid: str) -> DemographicCompareResponse:
+        resp = await self._client.get(
+            "/v1/demographics/compare", params={"geoid": geoid},
+        )
+        self._handle_response(resp)
+        return DemographicCompareResponse.model_validate(resp.json())
+
+    async def webhooks_list(self) -> WebhookListResponse:
+        resp = await self._client.get("/v1/webhooks")
+        self._handle_response(resp)
+        return WebhookListResponse.model_validate(resp.json())
+
+    async def webhooks_create(
+        self,
+        *,
+        url: str,
+        events: list[str],
+        secret: str | None = None,
+        filters: dict[str, Any] | None = None,
+    ) -> WebhookResponse:
+        body: dict[str, Any] = {"url": url, "events": events}
+        if secret is not None:
+            body["secret"] = secret
+        if filters is not None:
+            body["filters"] = filters
+        resp = await self._client.post("/v1/webhooks", json=body)
+        self._handle_response(resp)
+        return WebhookResponse.model_validate(resp.json())
+
+    async def webhooks_delete(self, *, webhook_id: int) -> None:
+        resp = await self._client.delete(f"/v1/webhooks/{webhook_id}")
+        self._handle_response(resp)
+
 
 # ---------------------------------------------------------------------------
 # Sync client
@@ -340,3 +382,41 @@ class GeoHealthClient:
         resp = self._client.get("/v1/dictionary", params=params)
         self._handle_response(resp)
         return DictionaryResponse.model_validate(resp.json())
+
+    def trends(self, *, geoid: str) -> TrendsResponse:
+        resp = self._client.get("/v1/trends", params={"geoid": geoid})
+        self._handle_response(resp)
+        return TrendsResponse.model_validate(resp.json())
+
+    def demographics_compare(self, *, geoid: str) -> DemographicCompareResponse:
+        resp = self._client.get(
+            "/v1/demographics/compare", params={"geoid": geoid},
+        )
+        self._handle_response(resp)
+        return DemographicCompareResponse.model_validate(resp.json())
+
+    def webhooks_list(self) -> WebhookListResponse:
+        resp = self._client.get("/v1/webhooks")
+        self._handle_response(resp)
+        return WebhookListResponse.model_validate(resp.json())
+
+    def webhooks_create(
+        self,
+        *,
+        url: str,
+        events: list[str],
+        secret: str | None = None,
+        filters: dict[str, Any] | None = None,
+    ) -> WebhookResponse:
+        body: dict[str, Any] = {"url": url, "events": events}
+        if secret is not None:
+            body["secret"] = secret
+        if filters is not None:
+            body["filters"] = filters
+        resp = self._client.post("/v1/webhooks", json=body)
+        self._handle_response(resp)
+        return WebhookResponse.model_validate(resp.json())
+
+    def webhooks_delete(self, *, webhook_id: int) -> None:
+        resp = self._client.delete(f"/v1/webhooks/{webhook_id}")
+        self._handle_response(resp)

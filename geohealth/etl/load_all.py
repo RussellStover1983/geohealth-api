@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
 import time
 
@@ -18,6 +19,40 @@ from geohealth.config import settings
 from geohealth.etl.utils import ALL_STATE_FIPS
 
 logger = logging.getLogger(__name__)
+
+
+def _dispatch_webhooks(state_fips: str, step: str, engine) -> None:
+    """Fire webhook notifications after a successful ETL step.
+
+    Runs the async dispatch_event in a one-shot event loop so the ETL
+    (which is synchronous) doesn't need to be restructured.
+    """
+    try:
+        from sqlalchemy import select as sa_select
+        from sqlalchemy.orm import Session
+        from geohealth.db.models import WebhookSubscription
+        from geohealth.services.webhooks import dispatch_event
+
+        with Session(engine, join_transaction_mode="create_savepoint") as session:
+            subs = session.scalars(
+                sa_select(WebhookSubscription).where(
+                    WebhookSubscription.active.is_(True)
+                )
+            ).all()
+            session.expunge_all()
+
+        if not subs:
+            return
+
+        data = {"state_fips": state_fips, "etl_step": step}
+        result = asyncio.run(dispatch_event("data.updated", data, subs))
+        if result["delivered"] or result["failed"]:
+            logger.info(
+                "Webhooks for state %s/%s: %d delivered, %d failed",
+                state_fips, step, result["delivered"], result["failed"],
+            )
+    except Exception:
+        logger.debug("Webhook dispatch skipped (table may not exist yet)", exc_info=True)
 
 
 def query_loaded_states(engine) -> set[str]:
@@ -88,6 +123,9 @@ def run_pipeline(
 
             # Step 5: SDOH index
             compute_sdoh_index.compute_for_state(fips, engine)
+
+            # Notify webhook subscribers
+            _dispatch_webhooks(fips, "complete", engine)
 
             elapsed = time.monotonic() - state_start
             logger.info("State %s completed in %.1fs", fips, elapsed)

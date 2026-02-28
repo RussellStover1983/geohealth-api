@@ -48,6 +48,23 @@ async with AsyncGeoHealthClient(
         for field in cat.fields:
             print(f"{field.name}: {field.clinical_relevance}")
 
+    # Historical trends
+    trends = await client.trends(geoid="27053026200")
+    for year in trends.years:
+        print(year["year"], year["poverty_rate"])
+
+    # Demographic rankings
+    demo = await client.demographics_compare(geoid="27053026200")
+    for r in demo.rankings:
+        print(r["metric"], f"state pct: {r['state_percentile']}")
+
+    # Webhooks
+    hook = await client.webhooks_create(
+        url="https://example.com/hook", events=["data.updated"],
+    )
+    subs = await client.webhooks_list()
+    await client.webhooks_delete(webhook_id=hook.id)
+
     # Batch lookup
     batch = await client.batch(addresses=[
         "1234 Main St, Minneapolis, MN",
@@ -147,6 +164,8 @@ Add to your `claude_desktop_config.json`:
 | `batch_health_lookup` | Multi-address lookup (up to 50) |
 | `find_nearby_tracts` | Spatial radius search |
 | `compare_tracts` | Compare tracts or tract vs averages |
+| `get_tract_trends` | Historical trend data across ACS years |
+| `compare_demographics` | Percentile rankings at county/state/national level |
 | `get_data_dictionary` | Field definitions with clinical context |
 | `get_tract_statistics` | Data coverage by state |
 

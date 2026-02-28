@@ -21,9 +21,12 @@ from geohealth.api.middleware import RequestLoggingMiddleware
 from geohealth.api.routes.batch import router as batch_router
 from geohealth.api.routes.compare import router as compare_router
 from geohealth.api.routes.context import router as context_router
+from geohealth.api.routes.demographics import router as demographics_router
 from geohealth.api.routes.dictionary import router as dictionary_router
 from geohealth.api.routes.nearby import router as nearby_router
 from geohealth.api.routes.stats import router as stats_router
+from geohealth.api.routes.trends import router as trends_router
+from geohealth.api.routes.webhooks import router as webhooks_router
 from geohealth.api.llms_content import LLMS_FULL_TXT, LLMS_TXT
 from geohealth.api.schemas import ErrorResponse, HealthResponse
 from geohealth.config import settings
@@ -111,6 +114,28 @@ _OPENAPI_TAGS = [
             "relevance, and interpretation guidance."
         ),
     },
+    {
+        "name": "trends",
+        "description": (
+            "Historical trends — multi-year ACS demographic snapshots "
+            "for a census tract, with computed change metrics."
+        ),
+    },
+    {
+        "name": "demographics",
+        "description": (
+            "Demographic comparison — compare a tract against county, "
+            "state, and national averages with percentile rankings."
+        ),
+    },
+    {
+        "name": "webhooks",
+        "description": (
+            "Webhook subscriptions — register callback URLs for "
+            "notifications when tract data changes or thresholds "
+            "are exceeded."
+        ),
+    },
 ]
 
 
@@ -165,6 +190,9 @@ app.include_router(batch_router)
 app.include_router(nearby_router)
 app.include_router(compare_router)
 app.include_router(dictionary_router)
+app.include_router(trends_router)
+app.include_router(demographics_router)
+app.include_router(webhooks_router)
 
 
 @app.get(

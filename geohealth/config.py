@@ -24,7 +24,11 @@ class Settings(BaseSettings):
     api_keys: str = ""
     rate_limit_per_minute: int = 60
     rate_limit_window: int = 60
+    acs_current_year: int = 2022
     batch_max_size: int = 50
+    webhook_max_per_key: int = 10
+    webhook_timeout: int = 10
+    webhook_max_retries: int = 3
     run_migrations: bool = True
     log_format: str = "text"
     log_level: str = "INFO"

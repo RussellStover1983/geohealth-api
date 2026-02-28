@@ -1,6 +1,6 @@
 # Data Dictionary
 
-Every census tract profile includes **26 fields** across four categories. This page provides clinical thresholds and interpretation guidance for each field.
+Every census tract profile includes **37 fields** across five categories. This page provides clinical thresholds and interpretation guidance for each field.
 
 !!! tip "Quick triage"
     If you only have time to check one number, look at **`sdoh_index`**. Values above **0.6** indicate high social vulnerability — patients from these tracts are likely to face multiple compounding barriers to health.
@@ -76,6 +76,29 @@ Source: **CDC PLACES**. All values are **crude prevalence percentages** among ad
 
 !!! info "Checkup and dental rates"
     These are **inverted** — low values are concerning. Checkup rates below 65% and dental rates below 55% suggest underutilization of preventive care, often indicating access barriers, distrust of healthcare, or competing priorities.
+
+---
+
+## Environmental (EPA EJScreen)
+
+Source: **EPA EJScreen**. Environmental justice screening indicators at the census tract level. Data may come from the EPA API (`_source: "ejscreen_api"`) or be estimated from demographic correlations (`_source: "estimated"`).
+
+| Field | What It Measures | Unit | Interpretation |
+|-------|-----------------|------|----------------|
+| `epa_data.pm25` | Fine particulate matter (PM2.5) | μg/m³ | Annual average concentration. EPA standard is 12 μg/m³; above indicates poor air quality. |
+| `epa_data.ozone` | Ground-level ozone | ppb | 8-hour average. EPA standard is 70 ppb. Triggers respiratory issues. |
+| `epa_data.diesel_pm` | Diesel particulate matter | μg/m³ | Proxy for traffic-related air pollution. Higher values near highways and industrial areas. |
+| `epa_data.air_toxics_cancer_risk` | Lifetime cancer risk from air toxics | per million | EPA considers >100 per million elevated. |
+| `epa_data.respiratory_hazard_index` | Respiratory hazard from air toxics | ratio | Above 1.0 indicates potential respiratory concern. |
+| `epa_data.traffic_proximity` | Traffic proximity and volume | vehicles×distance | Higher values = more traffic exposure. |
+| `epa_data.lead_paint_pct` | Pre-1960 housing proportion | 0–1 | Indicator of lead paint risk. Above 0.5 = significant concern. |
+| `epa_data.superfund_proximity` | Proximity to Superfund sites | count/distance | Higher = closer to contaminated sites. |
+| `epa_data.rmp_proximity` | Proximity to RMP facilities | count/distance | Risk Management Plan facilities with hazardous chemicals. |
+| `epa_data.hazardous_waste_proximity` | Proximity to TSDF facilities | count/distance | Treatment, storage, and disposal facilities. |
+| `epa_data.wastewater_discharge` | Wastewater discharge indicator | toxicity-weighted | Stream proximity weighted by pollutant toxicity. |
+
+!!! info "Data source indicator"
+    The `_source` field in `epa_data` indicates whether values come from the EPA EJScreen API (`"ejscreen_api"`) or are estimated from demographic correlations (`"estimated"`). Estimated data provides reasonable approximations but should be interpreted with caution.
 
 ---
 

@@ -172,6 +172,19 @@ class TractDataModel(BaseModel):
             "indicate high social vulnerability warranting intensive care coordination."
         ),
     )
+    epa_data: dict | None = Field(
+        None,
+        description=(
+            "EPA EJScreen environmental indicators. Keys may include: pm25 (fine "
+            "particulate matter ug/m3), ozone (ppb), diesel_pm (ug/m3), "
+            "air_toxics_cancer_risk (per million), respiratory_hazard_index, "
+            "traffic_proximity (vehicles/day/distance), lead_paint_pct (% pre-1960 "
+            "housing), superfund_proximity, rmp_proximity, hazardous_waste_proximity, "
+            "wastewater_discharge. Higher values indicate greater environmental burden. "
+            "The _source field indicates data origin: 'ejscreen_api' (real EPA data) "
+            "or 'estimated' (modeled from SVI/poverty correlation)."
+        ),
+    )
 
     model_config = {
         "extra": "allow",
@@ -206,6 +219,13 @@ class TractDataModel(BaseModel):
                         "sleep": 35.2,
                     },
                     "sdoh_index": 0.41,
+                    "epa_data": {
+                        "pm25": 8.2,
+                        "ozone": 42.1,
+                        "diesel_pm": 0.31,
+                        "air_toxics_cancer_risk": 28.0,
+                        "lead_paint_pct": 0.42,
+                    },
                 }
             ]
         },
@@ -419,7 +439,8 @@ class CompareSide(BaseModel):
     type: str = Field(
         ...,
         description=(
-            "Entity type: 'tract', 'state_average', or 'national_average'"
+            "Entity type: 'tract', 'county_average', 'state_average', "
+            "or 'national_average'"
         ),
     )
     geoid: str | None = Field(
@@ -556,3 +577,144 @@ class DictionaryResponse(BaseModel):
     categories: list[DictionaryCategory] = Field(
         ..., description="Fields grouped by category"
     )
+
+
+# ---------------------------------------------------------------------------
+# /v1/trends
+# ---------------------------------------------------------------------------
+
+
+class TrendYearData(BaseModel):
+    """ACS demographic snapshot for a single year."""
+
+    year: int = Field(..., description="Data year")
+    total_population: int | None = Field(None, description="Total population")
+    median_household_income: float | None = Field(None, description="Median household income ($)")
+    poverty_rate: float | None = Field(None, description="Poverty rate (%)")
+    uninsured_rate: float | None = Field(None, description="Uninsured rate (%)")
+    unemployment_rate: float | None = Field(None, description="Unemployment rate (%)")
+    median_age: float | None = Field(None, description="Median age (years)")
+
+
+class TrendChange(BaseModel):
+    """Computed change between earliest and latest data points."""
+
+    metric: str = Field(..., description="Metric name")
+    earliest_year: int | None = Field(None, description="First year with data")
+    latest_year: int | None = Field(None, description="Last year with data")
+    earliest_value: float | None = Field(None, description="Value in earliest year")
+    latest_value: float | None = Field(None, description="Value in latest year")
+    absolute_change: float | None = Field(None, description="Latest minus earliest")
+    percent_change: float | None = Field(
+        None, description="Percent change from earliest to latest"
+    )
+
+
+class TrendsResponse(BaseModel):
+    """Historical trend data for a census tract."""
+
+    geoid: str = Field(..., description="11-digit census tract GEOID")
+    name: str | None = Field(None, description="Tract name")
+    years: list[TrendYearData] = Field(
+        ..., description="ACS data for each available year, sorted ascending"
+    )
+    changes: list[TrendChange] = Field(
+        ..., description="Computed changes between earliest and latest data points"
+    )
+
+
+# ---------------------------------------------------------------------------
+# /v1/demographics/compare
+# ---------------------------------------------------------------------------
+
+
+class DemographicRanking(BaseModel):
+    """Percentile ranking of a metric within a geographic scope."""
+
+    metric: str = Field(..., description="Metric name")
+    value: float | None = Field(None, description="Tract value")
+    county_percentile: float | None = Field(
+        None, description="Percentile rank within county (0-100)"
+    )
+    state_percentile: float | None = Field(
+        None, description="Percentile rank within state (0-100)"
+    )
+    national_percentile: float | None = Field(
+        None, description="Percentile rank nationally (0-100)"
+    )
+
+
+class DemographicAverages(BaseModel):
+    """Average values at county, state, and national levels."""
+
+    metric: str = Field(..., description="Metric name")
+    tract_value: float | None = Field(None, description="This tract's value")
+    county_avg: float | None = Field(None, description="County average")
+    state_avg: float | None = Field(None, description="State average")
+    national_avg: float | None = Field(None, description="National average")
+
+
+class DemographicCompareResponse(BaseModel):
+    """Comprehensive demographic comparison with rankings and averages."""
+
+    geoid: str = Field(..., description="11-digit census tract GEOID")
+    name: str | None = Field(None, description="Tract name")
+    state_fips: str = Field(..., description="2-digit state FIPS")
+    county_fips: str = Field(..., description="3-digit county FIPS")
+    rankings: list[DemographicRanking] = Field(
+        ..., description="Percentile rankings at county, state, and national levels"
+    )
+    averages: list[DemographicAverages] = Field(
+        ..., description="Tract value vs county, state, and national averages"
+    )
+
+
+# ---------------------------------------------------------------------------
+# /v1/webhooks
+# ---------------------------------------------------------------------------
+
+
+class WebhookCreate(BaseModel):
+    """Request body for creating a webhook subscription."""
+
+    url: str = Field(
+        ..., description="HTTPS callback URL for webhook delivery", max_length=2048,
+    )
+    events: list[str] = Field(
+        ...,
+        description=(
+            "Event types to subscribe to. Valid: 'data.updated' (ETL refreshes), "
+            "'threshold.exceeded' (metric crosses threshold)"
+        ),
+        min_length=1,
+    )
+    filters: dict | None = Field(
+        None,
+        description=(
+            "Optional filters: state_fips (list), geoids (list), "
+            "thresholds (dict of metric: {operator: '>', value: 20})"
+        ),
+    )
+    secret: str | None = Field(
+        None,
+        description="Shared secret for HMAC-SHA256 signature verification (max 64 chars)",
+        max_length=64,
+    )
+
+
+class WebhookResponse(BaseModel):
+    """A webhook subscription."""
+
+    id: int = Field(..., description="Subscription ID")
+    url: str = Field(..., description="Callback URL")
+    events: list[str] = Field(..., description="Subscribed event types")
+    filters: dict | None = Field(None, description="Applied filters")
+    active: bool = Field(..., description="Whether the subscription is active")
+    created_at: str = Field(..., description="ISO 8601 creation timestamp")
+
+
+class WebhookListResponse(BaseModel):
+    """List of webhook subscriptions for the authenticated key."""
+
+    total: int = Field(..., description="Total subscriptions")
+    webhooks: list[WebhookResponse] = Field(..., description="Subscriptions")

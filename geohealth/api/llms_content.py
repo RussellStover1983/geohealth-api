@@ -23,15 +23,19 @@ LLMS_TXT = """\
 - [GET /v1/context](/docs#/context): Primary lookup — address or lat/lng to tract demographics, SVI, PLACES, and optional AI narrative
 - [POST /v1/batch](/docs#/batch): Multi-address lookup (up to 50 concurrent)
 - [GET /v1/nearby](/docs#/nearby): Find census tracts within N miles of a point
-- [GET /v1/compare](/docs#/compare): Compare two tracts or tract vs state/national averages
+- [GET /v1/compare](/docs#/compare): Compare two tracts or tract vs county/state/national averages
+- [GET /v1/trends](/docs#/trends): Historical trend data across ACS years with computed changes
+- [GET /v1/demographics/compare](/docs#/demographics): Percentile rankings at county/state/national level
 - [GET /v1/dictionary](/docs#/dictionary): Field definitions with clinical interpretation guidance
 - [GET /v1/stats](/docs#/stats): Data coverage by state
+- [POST /v1/webhooks](/docs#/webhooks): Subscribe to data update notifications
 
 ## Key Data Fields
 
 - **Demographics (ACS)**: total_population, median_household_income, poverty_rate, uninsured_rate, unemployment_rate, median_age
 - **Vulnerability (SVI)**: rpl_theme1 (socioeconomic), rpl_theme2 (household/disability), rpl_theme3 (minority/language), rpl_theme4 (housing/transportation), rpl_themes (overall) — all as 0-1 percentiles
 - **Health Outcomes (PLACES)**: diabetes, obesity, mhlth (mental health), phlth (physical health), bphigh (high blood pressure), csmoking (smoking), casthma (asthma), chd (coronary heart disease), lpa (physical inactivity), binge (binge drinking), sleep (short sleep), checkup, dental, access2 (no insurance) — all as crude prevalence %
+- **Environmental (EPA EJScreen)**: pm25, ozone, diesel_pm, air_toxics_cancer_risk, respiratory_hazard_index, traffic_proximity, lead_paint_pct, superfund_proximity, rmp_proximity, hazardous_waste_proximity, wastewater_discharge
 - **Composite**: sdoh_index (0-1 scale, higher = more vulnerable)
 
 ## MCP Server (for AI Agents)
@@ -146,9 +150,40 @@ Parameters: `lat`, `lng`, `radius` (miles, default 5), `limit` (default 25), `of
 curl -H "X-API-Key: KEY" \\
   "https://geohealth-api-production.up.railway.app/v1/compare?geoid1=27053026200&geoid2=27053026300"
 
-# Tract vs state average
+# Tract vs county/state/national average
 curl -H "X-API-Key: KEY" \\
-  "https://geohealth-api-production.up.railway.app/v1/compare?geoid1=27053026200&compare_to=state"
+  "https://geohealth-api-production.up.railway.app/v1/compare?geoid1=27053026200&compare_to=county"
+```
+
+### GET /v1/trends — Historical Trends
+
+```bash
+curl -H "X-API-Key: KEY" \\
+  "https://geohealth-api-production.up.railway.app/v1/trends?geoid=27053026200"
+```
+
+Returns year-by-year ACS demographic snapshots and computed absolute/percent changes.
+
+### GET /v1/demographics/compare — Demographic Rankings
+
+```bash
+curl -H "X-API-Key: KEY" \\
+  "https://geohealth-api-production.up.railway.app/v1/demographics/compare?geoid=27053026200"
+```
+
+Returns percentile rankings at county, state, and national levels plus averages.
+
+### Webhooks — Event Subscriptions
+
+```bash
+# Create subscription
+curl -X POST -H "X-API-Key: KEY" -H "Content-Type: application/json" \\
+  -d '{"url":"https://example.com/hook","events":["data.updated"]}' \\
+  "https://geohealth-api-production.up.railway.app/v1/webhooks"
+
+# List subscriptions
+curl -H "X-API-Key: KEY" \\
+  "https://geohealth-api-production.up.railway.app/v1/webhooks"
 ```
 
 ### GET /v1/dictionary — Data Dictionary
@@ -222,6 +257,24 @@ Behavioral Risk Factor Surveillance System (BRFSS) model-based estimates.
 | places_measures.sleep | Short sleep (<7 hours) | >38% |
 | places_measures.lpa | No leisure-time physical activity | >30% |
 | places_measures.binge | Binge drinking | >20% |
+
+### Environmental (Source: EPA EJScreen)
+
+| Field | What It Measures | Unit |
+|-------|-----------------|------|
+| epa_data.pm25 | Fine particulate matter (PM2.5) | μg/m³ |
+| epa_data.ozone | Ground-level ozone | ppb |
+| epa_data.diesel_pm | Diesel particulate matter | μg/m³ |
+| epa_data.air_toxics_cancer_risk | Air toxics cancer risk | per million |
+| epa_data.respiratory_hazard_index | Respiratory hazard index | ratio |
+| epa_data.traffic_proximity | Traffic proximity and volume | vehicles/day/distance |
+| epa_data.lead_paint_pct | Pre-1960 housing (lead paint indicator) | proportion |
+| epa_data.superfund_proximity | Proximity to Superfund sites | count/distance |
+| epa_data.rmp_proximity | Proximity to Risk Management Plan facilities | count/distance |
+| epa_data.hazardous_waste_proximity | Proximity to hazardous waste facilities | count/distance |
+| epa_data.wastewater_discharge | Wastewater discharge indicator | toxicity-weighted |
+
+The `_source` field indicates data origin: `"ejscreen_api"` (real EPA data) or `"estimated"` (modeled from demographics).
 
 ### Composite Index
 
@@ -298,6 +351,8 @@ Add to `claude_desktop_config.json`:
 | batch_health_lookup | Multi-address lookup |
 | find_nearby_tracts | Spatial radius search |
 | compare_tracts | Compare tracts or tract vs averages |
+| get_tract_trends | Historical trend data across years |
+| compare_demographics | Percentile rankings at county/state/national level |
 | get_data_dictionary | Field definitions with clinical context |
 | get_tract_statistics | Data coverage by state |
 

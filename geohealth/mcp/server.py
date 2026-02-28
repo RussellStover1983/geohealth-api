@@ -214,3 +214,51 @@ async def get_tract_statistics() -> dict[str, Any]:
     client = _get_client()
     result = await client.stats()
     return result.model_dump()
+
+
+@mcp.tool()
+async def get_tract_trends(geoid: str) -> dict[str, Any]:
+    """Get historical trend data for a census tract across multiple years.
+
+    Returns year-by-year snapshots of key demographic metrics (population,
+    income, poverty, insurance, unemployment, age) plus computed changes
+    between the earliest and latest available years.
+
+    Use this to understand whether a community's social determinants are
+    improving or worsening over time. Rising poverty or declining income
+    trends signal growing vulnerability.
+
+    Args:
+        geoid: 11-digit census tract GEOID (e.g., "27053026200").
+
+    Returns:
+        Dict with geoid, name, years array (yearly snapshots), and
+        changes array (absolute and percent change per metric).
+    """
+    client = _get_client()
+    result = await client.trends(geoid=geoid)
+    return result.model_dump()
+
+
+@mcp.tool()
+async def compare_demographics(geoid: str) -> dict[str, Any]:
+    """Compare a tract's demographics against county, state, and national averages.
+
+    Returns percentile rankings showing where the tract falls relative to
+    peers at county, state, and national levels, plus average values at
+    each geographic scope.
+
+    Use this to contextualize a tract — a 90th percentile poverty rate
+    means 90% of tracts in that scope have lower poverty. Useful for
+    identifying disproportionately burdened communities.
+
+    Args:
+        geoid: 11-digit census tract GEOID (e.g., "27053026200").
+
+    Returns:
+        Dict with geoid, name, rankings (percentiles by scope), and
+        averages (county/state/national means) for 7 demographic metrics.
+    """
+    client = _get_client()
+    result = await client.demographics_compare(geoid=geoid)
+    return result.model_dump()

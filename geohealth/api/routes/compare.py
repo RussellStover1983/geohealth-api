@@ -45,10 +45,10 @@ def _compute_differences(a_vals: dict, b_vals: dict) -> dict:
     summary="Compare census tracts",
     description=(
         "Compare two census tracts side-by-side, or compare a single tract "
-        "against state or national averages.\n\n"
+        "against county, state, or national averages.\n\n"
         "Provide `geoid1` (required) plus **either** `geoid2` (a second "
-        "tract) **or** `compare_to` (`state` or `national`). The response "
-        "includes both sides' values and the computed differences (A - B)."
+        "tract) **or** `compare_to` (`county`, `state`, or `national`). The "
+        "response includes both sides' values and the computed differences (A - B)."
     ),
     response_model=CompareResponse,
     responses={
@@ -87,10 +87,10 @@ async def get_compare(
             status_code=400,
             detail="Provide either 'geoid2' or 'compare_to'.",
         )
-    if compare_to and compare_to not in ("state", "national"):
+    if compare_to and compare_to not in ("county", "state", "national"):
         raise HTTPException(
             status_code=400,
-            detail="'compare_to' must be 'state' or 'national'.",
+            detail="'compare_to' must be 'county', 'state', or 'national'.",
         )
 
     # --- fetch tract A -------------------------------------------------------
@@ -124,7 +124,14 @@ async def get_compare(
         avg_cols = [func.avg(getattr(TractProfile, f)).label(f) for f in COMPARED_FIELDS]
         stmt = select(*avg_cols)
 
-        if compare_to == "state":
+        if compare_to == "county":
+            stmt = stmt.where(
+                TractProfile.state_fips == tract_a.state_fips,
+                TractProfile.county_fips == tract_a.county_fips,
+            )
+            b_type = "county_average"
+            b_label = f"County {tract_a.state_fips}{tract_a.county_fips} average"
+        elif compare_to == "state":
             stmt = stmt.where(TractProfile.state_fips == tract_a.state_fips)
             b_type = "state_average"
             b_label = f"State {tract_a.state_fips} average"

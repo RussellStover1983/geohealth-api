@@ -131,13 +131,49 @@ async def test_compare_invalid_compare_to(client):
     try:
         resp = await client.get("/v1/compare", params={
             "geoid1": "27053001100",
-            "compare_to": "county",
+            "compare_to": "invalid",
         })
     finally:
         app.dependency_overrides.clear()
 
     assert resp.status_code == 400
     assert "'compare_to' must be" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_compare_tract_vs_county(client):
+    """Tract vs county average comparison."""
+    tract_a = _make_mock_tract()
+    avg_values = {
+        "total_population": 4800.0,
+        "median_household_income": 54000.0,
+        "poverty_rate": 14.0,
+        "uninsured_rate": 9.5,
+        "unemployment_rate": 5.5,
+        "median_age": 35.0,
+        "sdoh_index": 0.55,
+    }
+    mock_session = _mock_session_tract_then_avg(tract_a, avg_values)
+
+    from geohealth.api.dependencies import get_db
+    from geohealth.api.main import app
+
+    app.dependency_overrides[get_db] = lambda: mock_session
+    try:
+        resp = await client.get("/v1/compare", params={
+            "geoid1": "27053001100",
+            "compare_to": "county",
+        })
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["a"]["type"] == "tract"
+    assert body["b"]["type"] == "county_average"
+    assert "County 27053" in body["b"]["label"]
+    # poverty_rate diff: 18.5 - 14.0 = 4.5
+    assert body["differences"]["poverty_rate"] == pytest.approx(4.5, abs=0.01)
 
 
 @pytest.mark.asyncio

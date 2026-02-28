@@ -43,6 +43,7 @@ def _make_mock_tract():
     tract.svi_themes = {"socioeconomic_status": 0.78}
     tract.places_measures = {"diabetes": 12.1}
     tract.sdoh_index = 0.72
+    tract.epa_data = None
     return tract
 
 

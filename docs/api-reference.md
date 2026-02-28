@@ -167,7 +167,7 @@ Compare two tracts side-by-side, or compare a tract against state or national av
 |-----------|------|----------|-------------|
 | `geoid1` | string | Yes | 11-digit GEOID of the first tract |
 | `geoid2` | string | Conditional | 11-digit GEOID of the second tract (required if no `compare_to`) |
-| `compare_to` | string | Conditional | `"state"` or `"national"` (required if no `geoid2`) |
+| `compare_to` | string | Conditional | `"county"`, `"state"`, or `"national"` (required if no `geoid2`) |
 
 ### Examples
 
@@ -198,6 +198,140 @@ Compare two tracts side-by-side, or compare a tract against state or national av
   }
 }
 ```
+
+---
+
+## GET /v1/trends — Historical Trends
+
+Returns year-by-year ACS demographic snapshots for a census tract, with computed absolute and percent changes between the earliest and latest available years.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `geoid` | string | Yes | 11-digit tract GEOID |
+
+### Example
+
+```bash
+curl -H "X-API-Key: your-key" \
+  "https://geohealth-api-production.up.railway.app/v1/trends?geoid=27053026200"
+```
+
+### Response
+
+```json
+{
+  "geoid": "27053026200",
+  "name": "Census Tract 262",
+  "years": [
+    { "year": 2018, "total_population": 4200, "poverty_rate": 14.1, "...": "..." },
+    { "year": 2022, "total_population": 4521, "poverty_rate": 11.3, "...": "..." }
+  ],
+  "changes": [
+    {
+      "metric": "poverty_rate",
+      "earliest_year": 2018,
+      "latest_year": 2022,
+      "earliest_value": 14.1,
+      "latest_value": 11.3,
+      "absolute_change": -2.8,
+      "percent_change": -19.86
+    }
+  ]
+}
+```
+
+!!! note
+    Trend data must be loaded via the ETL pipeline (`python -m geohealth.etl.load_trends`). If no historical data exists, the response contains only the current-year snapshot.
+
+---
+
+## GET /v1/demographics/compare — Demographic Rankings
+
+Compare a tract's demographics against county, state, and national averages with percentile rankings.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `geoid` | string | Yes | 11-digit tract GEOID |
+
+### Example
+
+```bash
+curl -H "X-API-Key: your-key" \
+  "https://geohealth-api-production.up.railway.app/v1/demographics/compare?geoid=27053026200"
+```
+
+### Response
+
+```json
+{
+  "geoid": "27053026200",
+  "name": "Census Tract 262",
+  "state_fips": "27",
+  "county_fips": "053",
+  "rankings": [
+    {
+      "metric": "poverty_rate",
+      "value": 11.3,
+      "county_percentile": 45.2,
+      "state_percentile": 52.1,
+      "national_percentile": 38.7
+    }
+  ],
+  "averages": [
+    {
+      "metric": "poverty_rate",
+      "tract_value": 11.3,
+      "county_avg": 12.8,
+      "state_avg": 10.1,
+      "national_avg": 13.4
+    }
+  ]
+}
+```
+
+---
+
+## Webhooks — Event Subscriptions
+
+Subscribe to notifications when tract data is updated via the ETL pipeline.
+
+### POST /v1/webhooks — Create Subscription
+
+```bash
+curl -X POST -H "X-API-Key: your-key" -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/hook","events":["data.updated"],"secret":"my-secret"}' \
+  "https://geohealth-api-production.up.railway.app/v1/webhooks"
+```
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | Yes | Callback URL (HTTPS recommended) |
+| `events` | array | Yes | Event types: `"data.updated"`, `"threshold.exceeded"` |
+| `secret` | string | No | HMAC-SHA256 signing secret for payload verification |
+| `filters` | object | No | Optional filters (`state_fips`, `geoids`, `thresholds`) |
+
+### GET /v1/webhooks — List Subscriptions
+
+```bash
+curl -H "X-API-Key: your-key" \
+  "https://geohealth-api-production.up.railway.app/v1/webhooks"
+```
+
+### DELETE /v1/webhooks/{id} — Remove Subscription
+
+```bash
+curl -X DELETE -H "X-API-Key: your-key" \
+  "https://geohealth-api-production.up.railway.app/v1/webhooks/1"
+```
+
+!!! info "Webhook payloads"
+    Payloads include an `X-Webhook-Signature` header (when a secret is configured) containing `sha256=<hmac>` for verification. Delivery uses exponential backoff with up to 3 retries on 5xx errors.
 
 ---
 

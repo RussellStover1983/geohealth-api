@@ -26,6 +26,7 @@ def tract_to_dict(tract: TractProfile) -> dict:
         "svi_themes": tract.svi_themes,
         "places_measures": tract.places_measures,
         "sdoh_index": tract.sdoh_index,
+        "epa_data": tract.epa_data,
     }
 
 
