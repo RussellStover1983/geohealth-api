@@ -24,7 +24,7 @@ Census-tract-level geographic health intelligence API. Given an address or coord
 - Docs: `https://russellstover1983.github.io/geohealth-api/`
 - PyPI: `pip install geohealth-api` (v0.1.1)
 
-**Data loaded**: Minnesota (27), Kansas (20), Missouri (29) — 3,988 census tracts total.
+**Data loaded**: Georgia (13), Kansas (20), Minnesota (27), Missouri (29) — 6,784 census tracts total.
 
 ## Commands
 
