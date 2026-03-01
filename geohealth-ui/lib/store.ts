@@ -52,11 +52,11 @@ interface GeoHealthStore {
 }
 
 export const useGeoHealthStore = create<GeoHealthStore>((set) => ({
-  // Initial viewport: centered on Kansas City (coverage area center)
+  // Initial viewport: centered on continental US
   viewport: {
-    latitude: 38.5,
-    longitude: -94.5,
-    zoom: 6,
+    latitude: 39.5,
+    longitude: -98.35,
+    zoom: 4,
   },
   setViewport: (v) =>
     set((state) => ({ viewport: { ...state.viewport, ...v } })),

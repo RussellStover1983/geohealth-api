@@ -25,14 +25,61 @@ import { api } from "@/lib/api/client";
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
 /**
- * Approximate bounding boxes for the 4 loaded states.
- * Used to detect which states are visible in the viewport.
+ * Approximate bounding boxes for all 50 states + DC.
+ * Used to detect which states are visible in the viewport and auto-load their tract data.
  */
 const STATE_BOUNDS: Record<string, { minLat: number; maxLat: number; minLng: number; maxLng: number; fips: string }> = {
-  GA: { minLat: 30.36, maxLat: 35.0, minLng: -85.61, maxLng: -80.84, fips: "13" },
-  KS: { minLat: 36.99, maxLat: 40.0, minLng: -102.05, maxLng: -94.59, fips: "20" },
-  MN: { minLat: 43.5, maxLat: 49.38, minLng: -97.24, maxLng: -89.49, fips: "27" },
-  MO: { minLat: 35.99, maxLat: 40.61, minLng: -95.77, maxLng: -89.1, fips: "29" },
+  AL: { minLat: 30.22, maxLat: 35.01, minLng: -88.47, maxLng: -84.89, fips: "01" },
+  AK: { minLat: 51.21, maxLat: 71.39, minLng: -179.15, maxLng: -129.98, fips: "02" },
+  AZ: { minLat: 31.33, maxLat: 37.00, minLng: -114.81, maxLng: -109.04, fips: "04" },
+  AR: { minLat: 33.00, maxLat: 36.50, minLng: -94.62, maxLng: -89.64, fips: "05" },
+  CA: { minLat: 32.53, maxLat: 42.01, minLng: -124.48, maxLng: -114.13, fips: "06" },
+  CO: { minLat: 36.99, maxLat: 41.00, minLng: -109.06, maxLng: -102.04, fips: "08" },
+  CT: { minLat: 40.99, maxLat: 42.05, minLng: -73.73, maxLng: -71.79, fips: "09" },
+  DE: { minLat: 38.45, maxLat: 39.84, minLng: -75.79, maxLng: -75.05, fips: "10" },
+  DC: { minLat: 38.79, maxLat: 38.99, minLng: -77.12, maxLng: -76.91, fips: "11" },
+  FL: { minLat: 24.40, maxLat: 31.00, minLng: -87.63, maxLng: -80.03, fips: "12" },
+  GA: { minLat: 30.36, maxLat: 35.00, minLng: -85.61, maxLng: -80.84, fips: "13" },
+  HI: { minLat: 18.91, maxLat: 22.24, minLng: -160.25, maxLng: -154.81, fips: "15" },
+  ID: { minLat: 41.99, maxLat: 49.00, minLng: -117.24, maxLng: -111.04, fips: "16" },
+  IL: { minLat: 36.97, maxLat: 42.51, minLng: -91.51, maxLng: -87.49, fips: "17" },
+  IN: { minLat: 37.77, maxLat: 41.76, minLng: -88.10, maxLng: -84.78, fips: "18" },
+  IA: { minLat: 40.38, maxLat: 43.50, minLng: -96.64, maxLng: -90.14, fips: "19" },
+  KS: { minLat: 36.99, maxLat: 40.00, minLng: -102.05, maxLng: -94.59, fips: "20" },
+  KY: { minLat: 36.50, maxLat: 39.15, minLng: -89.57, maxLng: -81.96, fips: "21" },
+  LA: { minLat: 28.93, maxLat: 33.02, minLng: -94.04, maxLng: -88.82, fips: "22" },
+  ME: { minLat: 43.06, maxLat: 47.46, minLng: -71.08, maxLng: -66.95, fips: "23" },
+  MD: { minLat: 37.91, maxLat: 39.72, minLng: -79.49, maxLng: -75.05, fips: "24" },
+  MA: { minLat: 41.24, maxLat: 42.89, minLng: -73.51, maxLng: -69.93, fips: "25" },
+  MI: { minLat: 41.70, maxLat: 48.31, minLng: -90.42, maxLng: -82.12, fips: "26" },
+  MN: { minLat: 43.50, maxLat: 49.38, minLng: -97.24, maxLng: -89.49, fips: "27" },
+  MS: { minLat: 30.17, maxLat: 34.99, minLng: -91.66, maxLng: -88.10, fips: "28" },
+  MO: { minLat: 35.99, maxLat: 40.61, minLng: -95.77, maxLng: -89.10, fips: "29" },
+  MT: { minLat: 44.36, maxLat: 49.00, minLng: -116.05, maxLng: -104.04, fips: "30" },
+  NE: { minLat: 39.99, maxLat: 43.00, minLng: -104.05, maxLng: -95.31, fips: "31" },
+  NV: { minLat: 35.00, maxLat: 42.00, minLng: -120.01, maxLng: -114.04, fips: "32" },
+  NH: { minLat: 42.70, maxLat: 45.31, minLng: -72.56, maxLng: -70.61, fips: "33" },
+  NJ: { minLat: 38.93, maxLat: 41.36, minLng: -75.56, maxLng: -73.89, fips: "34" },
+  NM: { minLat: 31.33, maxLat: 37.00, minLng: -109.05, maxLng: -103.00, fips: "35" },
+  NY: { minLat: 40.50, maxLat: 45.02, minLng: -79.76, maxLng: -71.86, fips: "36" },
+  NC: { minLat: 33.84, maxLat: 36.59, minLng: -84.32, maxLng: -75.46, fips: "37" },
+  ND: { minLat: 45.94, maxLat: 49.00, minLng: -104.05, maxLng: -96.55, fips: "38" },
+  OH: { minLat: 38.40, maxLat: 41.98, minLng: -84.82, maxLng: -80.52, fips: "39" },
+  OK: { minLat: 33.62, maxLat: 37.00, minLng: -103.00, maxLng: -94.43, fips: "40" },
+  OR: { minLat: 41.99, maxLat: 46.29, minLng: -124.57, maxLng: -116.46, fips: "41" },
+  PA: { minLat: 39.72, maxLat: 42.27, minLng: -80.52, maxLng: -74.69, fips: "42" },
+  RI: { minLat: 41.15, maxLat: 42.02, minLng: -71.86, maxLng: -71.12, fips: "44" },
+  SC: { minLat: 32.03, maxLat: 35.22, minLng: -83.35, maxLng: -78.54, fips: "45" },
+  SD: { minLat: 42.48, maxLat: 45.95, minLng: -104.06, maxLng: -96.44, fips: "46" },
+  TN: { minLat: 34.98, maxLat: 36.68, minLng: -90.31, maxLng: -81.65, fips: "47" },
+  TX: { minLat: 25.84, maxLat: 36.50, minLng: -106.65, maxLng: -93.51, fips: "48" },
+  UT: { minLat: 36.99, maxLat: 42.00, minLng: -114.05, maxLng: -109.04, fips: "49" },
+  VT: { minLat: 42.73, maxLat: 45.02, minLng: -73.44, maxLng: -71.46, fips: "50" },
+  VA: { minLat: 36.54, maxLat: 39.47, minLng: -83.68, maxLng: -75.24, fips: "51" },
+  WA: { minLat: 45.54, maxLat: 49.00, minLng: -124.85, maxLng: -116.92, fips: "53" },
+  WV: { minLat: 37.20, maxLat: 40.64, minLng: -82.64, maxLng: -77.72, fips: "54" },
+  WI: { minLat: 42.49, maxLat: 47.31, minLng: -92.89, maxLng: -86.25, fips: "55" },
+  WY: { minLat: 40.99, maxLat: 45.01, minLng: -111.06, maxLng: -104.05, fips: "56" },
 };
 
 interface HoveredFeature {
@@ -387,7 +434,7 @@ export function MapContainer() {
               Search an address to explore SDOH data
             </p>
             <p className="mt-1 text-xs text-stone-500">
-              Coverage: Georgia, Kansas, Minnesota, Missouri
+              Coverage: All 50 US states + DC
             </p>
           </div>
         </div>
