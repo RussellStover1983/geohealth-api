@@ -23,6 +23,7 @@ from geohealth.api.routes.compare import router as compare_router
 from geohealth.api.routes.context import router as context_router
 from geohealth.api.routes.demographics import router as demographics_router
 from geohealth.api.routes.dictionary import router as dictionary_router
+from geohealth.api.routes.geojson import router as geojson_router
 from geohealth.api.routes.nearby import router as nearby_router
 from geohealth.api.routes.stats import router as stats_router
 from geohealth.api.routes.trends import router as trends_router
@@ -193,6 +194,7 @@ app.include_router(dictionary_router)
 app.include_router(trends_router)
 app.include_router(demographics_router)
 app.include_router(webhooks_router)
+app.include_router(geojson_router)
 
 
 @app.get(
