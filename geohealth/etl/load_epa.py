@@ -113,7 +113,8 @@ def _generate_synthetic_epa_data(state_fips: str, engine: Engine) -> pd.DataFram
         geoid = row[0]
         poverty = row[1] or 10.0
         svi = row[2] or {}
-        overall_svi = svi.get("rpl_themes", 0.5) if isinstance(svi, dict) else 0.5
+        overall_svi = svi.get("rpl_themes") if isinstance(svi, dict) else None
+        overall_svi = overall_svi if overall_svi is not None else 0.5
 
         # Generate correlated environmental data
         # Higher poverty/SVI → higher environmental burden (well-documented correlation)
