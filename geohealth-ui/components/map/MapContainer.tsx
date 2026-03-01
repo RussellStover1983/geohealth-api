@@ -24,6 +24,9 @@ import { api } from "@/lib/api/client";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
+/** Minimum zoom level before auto-loading state tract data */
+const MIN_LOAD_ZOOM = 6;
+
 /**
  * Approximate bounding boxes for all 50 states + DC.
  * Used to detect which states are visible in the viewport and auto-load their tract data.
@@ -110,6 +113,7 @@ export function MapContainer() {
   );
   const [hoveredGeoid, setHoveredGeoid] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string>("grab");
+  const [isLoadingTracts, setIsLoadingTracts] = useState(false);
 
   // Fly to target when it changes
   useEffect(() => {
@@ -124,43 +128,59 @@ export function MapContainer() {
     }
   }, [flyToTarget, clearFlyTo]);
 
-  // Auto-load states when they become visible in the viewport
+  // Auto-load states when they become visible in the viewport (debounced, zoom-gated)
   const loadingRef = useRef<Set<string>>(new Set());
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current.getMap();
-    if (!map) return;
+    // Debounce: wait 300ms after the last viewport change before checking
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (!mapRef.current) return;
+      const map = mapRef.current.getMap();
+      if (!map) return;
 
-    const bounds = map.getBounds();
-    if (!bounds) return;
+      // Don't load tract data when zoomed out too far
+      if (viewport.zoom < MIN_LOAD_ZOOM) return;
 
-    const sw = bounds.getSouthWest();
-    const ne = bounds.getNorthEast();
+      const bounds = map.getBounds();
+      if (!bounds) return;
 
-    for (const [, state] of Object.entries(STATE_BOUNDS)) {
-      // Check if the state's bounding box overlaps the viewport
-      const overlaps =
-        state.minLat <= ne.lat &&
-        state.maxLat >= sw.lat &&
-        state.minLng <= ne.lng &&
-        state.maxLng >= sw.lng;
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
 
-      if (overlaps && !loadedStates.has(state.fips) && !loadingRef.current.has(state.fips)) {
-        loadingRef.current.add(state.fips);
-        api
-          .tractsGeoJSON({ state_fips: state.fips, limit: 2000 })
-          .then((geojson) => {
-            mergeTractsGeoJSON(geojson, state.fips);
-          })
-          .catch(() => {
-            // Silently fail — user can retry by panning
-          })
-          .finally(() => {
-            loadingRef.current.delete(state.fips);
-          });
+      // Use simplified geometry when zoomed out, full detail when zoomed in
+      const simplify = viewport.zoom < 9 ? 0.001 : 0;
+
+      for (const [, state] of Object.entries(STATE_BOUNDS)) {
+        const overlaps =
+          state.minLat <= ne.lat &&
+          state.maxLat >= sw.lat &&
+          state.minLng <= ne.lng &&
+          state.maxLng >= sw.lng;
+
+        if (overlaps && !loadedStates.has(state.fips) && !loadingRef.current.has(state.fips)) {
+          loadingRef.current.add(state.fips);
+          setIsLoadingTracts(true);
+          api
+            .tractsGeoJSON({ state_fips: state.fips, limit: 2000, simplify })
+            .then((geojson) => {
+              mergeTractsGeoJSON(geojson, state.fips);
+            })
+            .catch(() => {
+              // Silently fail — user can retry by panning
+            })
+            .finally(() => {
+              loadingRef.current.delete(state.fips);
+              if (loadingRef.current.size === 0) setIsLoadingTracts(false);
+            });
+        }
       }
-    }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [viewport, loadedStates, mergeTractsGeoJSON]);
 
   const onMove = useCallback(
@@ -403,6 +423,16 @@ export function MapContainer() {
           </Popup>
         )}
       </Map>
+
+      {/* Loading indicator */}
+      {isLoadingTracts && (
+        <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2">
+          <div className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-medium text-stone-600 shadow-md backdrop-blur-sm">
+            <div className="h-3 w-3 animate-spin rounded-full border-2 border-stone-300 border-t-accent-500" />
+            Loading tract data...
+          </div>
+        </div>
+      )}
 
       {/* Legend overlay */}
       {metricConfig && (

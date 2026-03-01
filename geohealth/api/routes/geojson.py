@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from geoalchemy2.functions import ST_AsGeoJSON, ST_DWithin, ST_Point, ST_SetSRID
+from geoalchemy2.functions import ST_AsGeoJSON, ST_DWithin, ST_Point, ST_SetSRID, ST_SimplifyPreserveTopology
 from sqlalchemy import cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from geoalchemy2 import Geography
@@ -42,6 +42,7 @@ async def get_tracts_geojson(
     lat: float | None = Query(None, ge=-90, le=90, description="Center latitude (for radius filter)"),
     lng: float | None = Query(None, ge=-180, le=180, description="Center longitude (for radius filter)"),
     radius: float = Query(10.0, gt=0, le=50, description="Radius in miles (max 50, used with lat/lng)"),
+    simplify: float = Query(0.0, ge=0, le=0.01, description="Geometry simplification tolerance (0=full detail, 0.001=moderate)"),
     limit: int = Query(500, gt=0, le=2000, description="Max tracts to return (max 2000)"),
     session: AsyncSession = Depends(get_db),
     api_key: str = Depends(require_api_key),
@@ -62,7 +63,12 @@ async def get_tracts_geojson(
             detail="Provide state_fips or lat+lng to filter tracts",
         )
 
-    geojson_col = ST_AsGeoJSON(TractProfile.geom).label("geojson")
+    geom_expr = (
+        ST_SimplifyPreserveTopology(TractProfile.geom, simplify)
+        if simplify > 0
+        else TractProfile.geom
+    )
+    geojson_col = ST_AsGeoJSON(geom_expr).label("geojson")
 
     stmt = (
         select(TractProfile, geojson_col)

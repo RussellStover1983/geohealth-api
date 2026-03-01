@@ -118,6 +118,7 @@ export const api = {
     lng?: number;
     radius?: number;
     limit?: number;
+    simplify?: number;
   }): Promise<GeoJSON.FeatureCollection> {
     const searchParams: Record<string, string> = {};
     if (params.state_fips) searchParams.state_fips = params.state_fips;
@@ -125,6 +126,7 @@ export const api = {
     if (params.lng !== undefined) searchParams.lng = params.lng.toString();
     if (params.radius !== undefined) searchParams.radius = params.radius.toString();
     if (params.limit !== undefined) searchParams.limit = params.limit.toString();
+    if (params.simplify !== undefined) searchParams.simplify = params.simplify.toString();
     return apiFetch<GeoJSON.FeatureCollection>("/v1/tracts/geojson", searchParams);
   },
 
