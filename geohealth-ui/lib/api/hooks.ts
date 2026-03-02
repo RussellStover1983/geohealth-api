@@ -176,6 +176,76 @@ export function useDemographicComparison(geoid: string | null) {
   return state;
 }
 
+export interface AddressSuggestion {
+  display_name: string;
+  lat: number;
+  lng: number;
+}
+
+export function useAddressSuggestions() {
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const search = useCallback((query: string) => {
+    // Clear any pending debounce
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (query.trim().length < 3) {
+      setSuggestions([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+
+    debounceRef.current = setTimeout(async () => {
+      // Cancel previous in-flight request
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        const res = await fetch(
+          `/api/autocomplete?q=${encodeURIComponent(query.trim())}`,
+          { signal: controller.signal }
+        );
+        if (!res.ok) throw new Error("fetch failed");
+        const data: AddressSuggestion[] = await res.json();
+        if (!controller.signal.aborted) {
+          setSuggestions(data);
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setSuggestions([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    }, 300);
+  }, []);
+
+  const clear = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (abortRef.current) abortRef.current.abort();
+    setSuggestions([]);
+    setIsLoading(false);
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
+
+  return { suggestions, isLoading, search, clear };
+}
+
 export function useDataDictionary() {
   const [state, setState] = useState<AsyncState<DictionaryResponse>>({
     data: null,

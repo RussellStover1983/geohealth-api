@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Map, {
   NavigationControl,
   GeolocateControl,
   Source,
   Layer,
-  Popup,
   type MapRef,
   type ViewStateChangeEvent,
   type MapLayerMouseEvent,
@@ -85,14 +84,6 @@ const STATE_BOUNDS: Record<string, { minLat: number; maxLat: number; minLng: num
   WY: { minLat: 40.99, maxLat: 45.01, minLng: -111.06, maxLng: -104.05, fips: "56" },
 };
 
-interface HoveredFeature {
-  lng: number;
-  lat: number;
-  name: string;
-  value: number | null;
-  geoid: string;
-}
-
 export function MapContainer() {
   const mapRef = useRef<MapRef>(null);
   const {
@@ -108,10 +99,6 @@ export function MapContainer() {
     mergeTractsGeoJSON,
   } = useGeoHealthStore();
 
-  const [hoveredFeature, setHoveredFeature] = useState<HoveredFeature | null>(
-    null
-  );
-  const [hoveredGeoid, setHoveredGeoid] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string>("grab");
   const [isLoadingTracts, setIsLoadingTracts] = useState(false);
 
@@ -202,34 +189,12 @@ export function MapContainer() {
       : POSITIVE_COLORS
     : POSITIVE_COLORS;
 
-  const onMouseEnter = useCallback(
-    (e: MapLayerMouseEvent) => {
-      setCursor("pointer");
-      if (e.features && e.features[0]) {
-        const props = e.features[0].properties;
-        if (!props) return;
-        const coords = e.lngLat;
-        const value =
-          metricConfig && props[activeLayer] != null
-            ? (props[activeLayer] as number)
-            : null;
-        setHoveredFeature({
-          lng: coords.lng,
-          lat: coords.lat,
-          name: (props.name as string) || `Tract ${props.geoid}`,
-          value,
-          geoid: props.geoid as string,
-        });
-        setHoveredGeoid(props.geoid as string);
-      }
-    },
-    [activeLayer, metricConfig]
-  );
+  const onMouseEnter = useCallback(() => {
+    setCursor("pointer");
+  }, []);
 
   const onMouseLeave = useCallback(() => {
     setCursor("grab");
-    setHoveredFeature(null);
-    setHoveredGeoid(null);
   }, []);
 
   const onClick = useCallback(
@@ -291,25 +256,6 @@ export function MapContainer() {
       ] as unknown as string)
     : "#0D9488";
 
-  // Highlight expression for hovered tract
-  const lineWidthExpr = hoveredGeoid
-    ? ([
-        "case",
-        ["==", ["get", "geoid"], hoveredGeoid],
-        3,
-        1,
-      ] as unknown as number)
-    : 1;
-
-  const lineColorExpr = hoveredGeoid
-    ? ([
-        "case",
-        ["==", ["get", "geoid"], hoveredGeoid],
-        "#0F766E",
-        "#ffffff",
-      ] as unknown as string)
-    : "#ffffff";
-
   return (
     <div className="relative h-full w-full">
       <Map
@@ -344,8 +290,8 @@ export function MapContainer() {
               id="tract-outline"
               type="line"
               paint={{
-                "line-color": lineColorExpr as unknown as string,
-                "line-width": lineWidthExpr as unknown as number,
+                "line-color": "#ffffff",
+                "line-width": 1,
                 "line-opacity": 0.8,
               }}
             />
@@ -393,35 +339,6 @@ export function MapContainer() {
           </Source>
         )}
 
-        {/* Hover popup */}
-        {hoveredFeature && (
-          <Popup
-            longitude={hoveredFeature.lng}
-            latitude={hoveredFeature.lat}
-            anchor="bottom"
-            closeButton={false}
-            closeOnClick={false}
-            offset={8}
-          >
-            <div className="text-xs">
-              <p className="font-semibold text-stone-900">
-                {hoveredFeature.name}
-              </p>
-              {metricConfig && (
-                <p className="text-stone-600">
-                  {metricConfig.label}:{" "}
-                  <span className="font-medium tabular-nums">
-                    {hoveredFeature.value != null
-                      ? metricConfig.unit === "$"
-                        ? `$${hoveredFeature.value.toLocaleString()}`
-                        : `${hoveredFeature.value.toFixed(metricConfig.decimals)}${metricConfig.unit === "%" ? "%" : ""}`
-                      : "N/A"}
-                  </span>
-                </p>
-              )}
-            </div>
-          </Popup>
-        )}
       </Map>
 
       {/* Loading indicator */}
