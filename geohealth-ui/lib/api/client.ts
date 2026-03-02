@@ -6,6 +6,9 @@ import type {
   DictionaryResponse,
   HealthResponse,
   ErrorResponse,
+  MarketFitResponse,
+  DemandDetailResponse,
+  SupplyDetailResponse,
 } from "./types";
 
 /**
@@ -59,6 +62,46 @@ async function apiFetch<T>(path: string, params?: Record<string, string>): Promi
   }
 
   const response = await fetch(url.toString(), { headers });
+
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`;
+    try {
+      const errorBody = (await response.json()) as ErrorResponse;
+      detail = errorBody.detail || detail;
+    } catch {
+      // response wasn't JSON
+    }
+    throw new ApiError(response.status, detail);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+/**
+ * DPC Market Fit API fetch — routes through /api/dpc proxy.
+ */
+const DPC_BASE = process.env.NEXT_PUBLIC_DPC_API_URL || "";
+const USE_DPC_PROXY = !DPC_BASE;
+
+async function dpcFetch<T>(path: string, params?: Record<string, string>): Promise<T> {
+  let url: URL;
+  if (USE_DPC_PROXY) {
+    url = new URL(`/api/dpc${path}`, window.location.origin);
+  } else {
+    url = new URL(path, DPC_BASE);
+  }
+
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") {
+        url.searchParams.set(key, value);
+      }
+    });
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: { Accept: "application/json" },
+  });
 
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
@@ -140,6 +183,45 @@ export const api = {
 
   dictionary(): Promise<DictionaryResponse> {
     return apiFetch<DictionaryResponse>("/v1/dictionary");
+  },
+
+  // DPC Market Fit endpoints (via /api/dpc proxy)
+  marketFit(params: {
+    tract_fips?: string;
+    address?: string;
+    lat?: number;
+    lon?: number;
+    zip_code?: string;
+    radius_miles?: number;
+  }): Promise<MarketFitResponse> {
+    const searchParams: Record<string, string> = {};
+    if (params.tract_fips) searchParams.tract_fips = params.tract_fips;
+    if (params.address) searchParams.address = params.address;
+    if (params.lat !== undefined) searchParams.lat = params.lat.toString();
+    if (params.lon !== undefined) searchParams.lon = params.lon.toString();
+    if (params.zip_code) searchParams.zip_code = params.zip_code;
+    if (params.radius_miles !== undefined) searchParams.radius_miles = params.radius_miles.toString();
+    return dpcFetch<MarketFitResponse>("/api/v1/market-fit", searchParams);
+  },
+
+  marketFitDemand(params: {
+    tract_fips?: string;
+    address?: string;
+  }): Promise<DemandDetailResponse> {
+    const searchParams: Record<string, string> = {};
+    if (params.tract_fips) searchParams.tract_fips = params.tract_fips;
+    if (params.address) searchParams.address = params.address;
+    return dpcFetch<DemandDetailResponse>("/api/v1/market-fit/demand", searchParams);
+  },
+
+  marketFitSupply(params: {
+    tract_fips?: string;
+    address?: string;
+  }): Promise<SupplyDetailResponse> {
+    const searchParams: Record<string, string> = {};
+    if (params.tract_fips) searchParams.tract_fips = params.tract_fips;
+    if (params.address) searchParams.address = params.address;
+    return dpcFetch<SupplyDetailResponse>("/api/v1/market-fit/supply", searchParams);
   },
 };
 

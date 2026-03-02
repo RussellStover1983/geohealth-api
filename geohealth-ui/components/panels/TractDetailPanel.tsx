@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NarrativePanel } from "./NarrativePanel";
 import { ComparisonPanel } from "./ComparisonPanel";
+import { DpcMarketFitCard } from "./DpcMarketFitCard";
 import { SviRadar } from "@/components/charts/SviRadar";
 import { HealthOutcomesGrid } from "@/components/charts/HealthOutcomesGrid";
 import { TrendSparkline } from "@/components/charts/TrendSparkline";
@@ -267,6 +268,9 @@ export function TractDetailPanel() {
                 {selectedNarrative && (
                   <NarrativePanel narrative={selectedNarrative} />
                 )}
+
+                {/* DPC Market Fit Score */}
+                <DpcMarketFitCard geoid={selectedTract.geoid} />
 
                 {/* Demographics */}
                 <DemographicsCard tract={selectedTract} />

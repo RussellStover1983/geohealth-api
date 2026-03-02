@@ -8,6 +8,7 @@ import type {
   TrendsResponse,
   DemographicCompareResponse,
   DictionaryResponse,
+  MarketFitResponse,
 } from "./types";
 
 interface AsyncState<T> {
@@ -244,6 +245,43 @@ export function useAddressSuggestions() {
   }, []);
 
   return { suggestions, isLoading, search, clear };
+}
+
+export function useMarketFit(geoid: string | null) {
+  const [state, setState] = useState<AsyncState<MarketFitResponse>>({
+    data: null,
+    error: null,
+    isLoading: false,
+  });
+
+  useEffect(() => {
+    if (!geoid) {
+      setState({ data: null, error: null, isLoading: false });
+      return;
+    }
+
+    let cancelled = false;
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+    api.marketFit({ tract_fips: geoid }).then(
+      (data) => {
+        if (!cancelled) setState({ data, error: null, isLoading: false });
+      },
+      (err) => {
+        if (!cancelled) {
+          const message =
+            err instanceof ApiError ? err.detail : "Failed to load market fit data";
+          setState({ data: null, error: message, isLoading: false });
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [geoid]);
+
+  return state;
 }
 
 export function useDataDictionary() {

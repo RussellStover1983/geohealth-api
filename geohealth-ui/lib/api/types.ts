@@ -191,3 +191,88 @@ export interface ErrorResponse {
   status_code: number;
   detail: string;
 }
+
+// ---------------------------------------------------------------------------
+// DPC Market Fit types
+// ---------------------------------------------------------------------------
+
+export type ScoreCategory = "WEAK" | "MODERATE" | "STRONG" | "EXCELLENT";
+
+export interface DimensionScore {
+  score: number;
+  category: ScoreCategory;
+  summary: string;
+  data_completeness: number;
+}
+
+export interface CompositeScore {
+  value: number;
+  percentile: number | null;
+  category: ScoreCategory;
+  weights_used: Record<string, number>;
+}
+
+export interface ResolvedLocation {
+  input: string;
+  resolved_lat: number | null;
+  resolved_lon: number | null;
+  primary_tract_fips: string | null;
+  tracts_in_radius: string[];
+  radius_miles: number;
+  market_population: number | null;
+}
+
+export interface DpcDataVintage {
+  census_acs: string | null;
+  cdc_places: string | null;
+  cdc_svi: string | null;
+  npi: string | null;
+  cbp: string | null;
+}
+
+export interface MarketFitResponse {
+  location: ResolvedLocation;
+  composite_score: CompositeScore;
+  dimensions: Record<string, DimensionScore>;
+  narrative: string | null;
+  data_vintage: DpcDataVintage;
+}
+
+export interface DemandDetailResponse {
+  location: ResolvedLocation;
+  total_population: number | null;
+  working_age_population: number | null;
+  uninsured_rate: number | null;
+  uninsured_count: number | null;
+  employer_insured_rate: number | null;
+  medicaid_rate: number | null;
+  medicare_rate: number | null;
+  median_household_income: number | null;
+  chronic_disease_prevalence: {
+    diabetes_pct: number | null;
+    hypertension_pct: number | null;
+    obesity_pct: number | null;
+    copd_pct: number | null;
+    depression_pct: number | null;
+    asthma_pct: number | null;
+  } | null;
+  svi_composite: number | null;
+  demand_score: DimensionScore | null;
+  affordability_score: DimensionScore | null;
+  data_vintage: DpcDataVintage;
+}
+
+export interface SupplyDetailResponse {
+  location: ResolvedLocation;
+  pcp_count: number;
+  pcp_per_100k: number | null;
+  national_benchmark_pcp_per_100k: number;
+  is_hpsa: boolean;
+  hpsa_score: number | null;
+  hpsa_type: string | null;
+  fqhc_count: number;
+  urgent_care_count: number;
+  rural_health_clinic_count: number;
+  supply_gap_score: DimensionScore | null;
+  data_vintage: DpcDataVintage;
+}
