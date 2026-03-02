@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from geoalchemy2.functions import ST_AsGeoJSON, ST_DWithin, ST_Point, ST_SetSRID, ST_SimplifyPreserveTopology
-from sqlalchemy import cast, func, select
+from sqlalchemy import cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from geoalchemy2 import Geography
 

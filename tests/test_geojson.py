@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from geohealth.services.rate_limiter import rate_limiter
 
 
 def _make_tract(geoid="27053001100", name="Census Tract 11"):
