@@ -1,0 +1,692 @@
+================================================================================
+DPC MARKET FIT API — TECHNICAL SPECIFICATION
+================================================================================
+Build a FastAPI application that evaluates the geographic market viability for
+Direct Primary Care (DPC) practices. The tool accepts a location (address, 
+lat/lon, or ZIP code), resolves it to census tract(s), assembles data from 
+multiple federal sources, and returns a composite DPC Market Fit Score with 
+five dimensional sub-scores.
+
+This follows the same architectural pattern as the SDOH Context API — 
+location in, data layers assembled, composite score out, with progressive 
+disclosure so every score is decomposable to source data.
+
+================================================================================
+SECTION 1: PROJECT STRUCTURE
+================================================================================
+
+dpc-market-fit-api/
+├── app/
+│   ├── main.py                    # FastAPI app, CORS, lifespan
+│   ├── config.py                  # Settings, API keys, data paths
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── request.py             # Input models (location, config overrides)
+│   │   ├── response.py            # Output models (scores, detail layers)
+│   │   └── enums.py               # Tier enums, score categories
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── market_fit.py          # Main scoring endpoint
+│   │   ├── supply.py              # Provider supply detail endpoint
+│   │   ├── demand.py              # Demand indicators endpoint
+│   │   ├── employer.py            # Employer opportunity endpoint
+│   │   └── competition.py         # Competition/saturation endpoint
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── geocoder.py            # Address/ZIP to lat/lon to tract FIPS
+│   │   ├── scoring.py             # Composite score engine
+│   │   ├── census_acs.py          # Census ACS data retrieval
+│   │   ├── cdc_places.py          # CDC PLACES chronic disease prevalence
+│   │   ├── cdc_svi.py             # CDC SVI vulnerability index
+│   │   ├── hrsa.py                # HPSA designations + FQHC locations
+│   │   ├── npi.py                 # NPI Registry provider counts
+│   │   ├── cbp.py                 # County Business Patterns employer data
+│   │   ├── cms.py                 # CMS utilization / ED visit data
+│   │   └── competition.py         # DPC practice registry + competing supply
+│   ├── data/
+│   │   ├── npi_taxonomy_config.json   # Taxonomy codes with tiering (see Section 6)
+│   │   └── scoring_weights.json       # Default dimension weights
+│   └── utils/
+│       ├── __init__.py
+│       ├── cache.py               # Redis/in-memory caching layer
+│       └── normalization.py       # Min-max and percentile normalization
+├── tests/
+│   ├── test_scoring.py
+│   ├── test_geocoder.py
+│   └── test_endpoints.py
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+└── README.md
+
+================================================================================
+SECTION 2: CORE ENDPOINTS
+================================================================================
+
+All endpoints return JSON. All accept location as either:
+  - address (string, geocoded via Census Geocoder API)
+  - lat/lon (float pair)
+  - zip_code (string, resolved to constituent tracts)
+  - tract_fips (string, 11-digit FIPS code, bypasses geocoding)
+
+When a ZIP code is provided, the API resolves to all intersecting tracts
+and returns a population-weighted composite across those tracts.
+
+--------------------------------------------------------------------------------
+GET /api/v1/market-fit
+--------------------------------------------------------------------------------
+Primary endpoint. Returns composite score and all five dimensional sub-scores
+with summary-level detail.
+
+Query Parameters:
+  - address (str, optional)
+  - lat (float, optional)
+  - lon (float, optional)
+  - zip_code (str, optional)
+  - tract_fips (str, optional)
+  - radius_miles (float, default=5.0) — defines the market area as all tracts
+    with centroids within this radius of the target location
+  - provider_tier (str, default="tier1") — which NPI taxonomy tier to use
+    for supply calculations. Options: "tier1", "tier1_tier2", "all"
+  - weights (object, optional) — override default dimension weights.
+    Keys: demand, supply_gap, affordability, employer, competition
+
+Response Model:
+{
+  "location": {
+    "input": "<original input>",
+    "resolved_lat": 39.0997,
+    "resolved_lon": -94.5786,
+    "primary_tract_fips": "29095001100",
+    "tracts_in_radius": ["29095001100", "29095001200", ...],
+    "radius_miles": 5.0,
+    "market_population": 87432
+  },
+  "composite_score": {
+    "value": 72.4,
+    "percentile": 81,
+    "category": "STRONG",
+    "weights_used": {
+      "demand": 0.25,
+      "supply_gap": 0.25,
+      "affordability": 0.20,
+      "employer": 0.20,
+      "competition": 0.10
+    }
+  },
+  "dimensions": {
+    "demand": { "score": 78.2, "category": "STRONG", "summary": "..." },
+    "supply_gap": { "score": 85.1, "category": "EXCELLENT", "summary": "..." },
+    "affordability": { "score": 61.3, "category": "STRONG", "summary": "..." },
+    "employer": { "score": 68.0, "category": "STRONG", "summary": "..." },
+    "competition": { "score": 55.2, "category": "MODERATE", "summary": "..." }
+  },
+  "narrative": "<AI-generated plain English summary of market viability>",
+  "data_vintage": {
+    "census_acs": "2022 5-Year",
+    "cdc_places": "2024 Release",
+    "cdc_svi": "2022",
+    "npi": "2025-02 Monthly Extract",
+    "cbp": "2022"
+  }
+}
+
+Category thresholds:
+  WEAK: 0-39
+  MODERATE: 40-59
+  STRONG: 60-79
+  EXCELLENT: 80-100
+
+--------------------------------------------------------------------------------
+GET /api/v1/market-fit/demand
+--------------------------------------------------------------------------------
+Returns detailed demand-side indicators for the market area.
+
+Response includes:
+  - total_population, working_age_population (18-64)
+  - age_sex_distribution (5-year cohorts)
+  - uninsured_rate, uninsured_count
+  - employer_insured_rate (proxy for HDHP exposure)
+  - medicaid_rate (not DPC-addressable but context)
+  - medicare_rate (not typical DPC but emerging segment)
+  - chronic_disease_prevalence:
+      - diabetes_pct
+      - hypertension_pct
+      - obesity_pct
+      - copd_pct
+      - depression_pct
+      - asthma_pct
+  - estimated_annual_pcp_visits (based on age-sex utilization rates)
+  - ed_visits_acsc_rate (ambulatory care sensitive conditions —
+    preventable ED visits that DPC could absorb)
+  - svi_composite (overall social vulnerability)
+
+--------------------------------------------------------------------------------
+GET /api/v1/market-fit/supply
+--------------------------------------------------------------------------------
+Returns detailed provider supply analysis.
+
+Response includes:
+  - pcp_count_tier1 (core primary care only)
+  - pcp_count_tier1_tier2 (expanded definition)
+  - pcp_count_all (all potentially primary care providers)
+  - pcp_per_100k_population (using selected tier)
+  - national_benchmark_pcp_per_100k (for comparison — ~75 per 100k)
+  - hpsa_designation: {
+      "is_hpsa": true/false,
+      "hpsa_score": 0-25,
+      "hpsa_type": "geographic" | "population" | "facility",
+      "designation_date": "2023-01-15"
+    }
+  - provider_detail: [
+      {
+        "npi": "1234567890",
+        "name": "Jane Smith MD",
+        "taxonomy_code": "207Q00000X",
+        "taxonomy_description": "Family Medicine",
+        "tier": "tier1",
+        "address": "...",
+        "lat": 39.10,
+        "lon": -94.58,
+        "distance_miles": 1.2
+      }
+    ]
+  - fqhc_count (competing free/sliding-scale supply)
+  - rural_health_clinic_count
+  - urgent_care_count
+  - obgyn_count (contextual — women who have a provider relationship)
+  - nearest_hospital_miles
+
+--------------------------------------------------------------------------------
+GET /api/v1/market-fit/employer
+--------------------------------------------------------------------------------
+Returns employer landscape analysis from County Business Patterns.
+
+Response includes:
+  - total_establishments
+  - establishments_by_size_class: {
+      "1_4": 234,
+      "5_9": 156,
+      "10_19": 98,
+      "20_49": 67,
+      "50_99": 34,
+      "100_249": 21,
+      "250_499": 8,
+      "500_999": 3,
+      "1000_plus": 1
+    }
+  - dpc_target_establishments (10-249 employees, summed)
+  - dpc_target_estimated_employees
+  - industry_mix: [
+      {
+        "naics_2digit": "44",
+        "industry": "Retail Trade",
+        "establishments": 45,
+        "benefit_generosity_proxy": "LOW",
+        "dpc_opportunity": "HIGH"
+      }
+    ]
+  - median_annual_wage_estimate
+  - industries_with_low_benefit_generosity_pct (retail, food service,
+    construction, agriculture, accommodation — as pct of target establishments)
+
+--------------------------------------------------------------------------------
+GET /api/v1/market-fit/competition
+--------------------------------------------------------------------------------
+Returns existing DPC and competing primary care landscape.
+
+Response includes:
+  - existing_dpc_practices: [
+      {
+        "name": "...",
+        "address": "...",
+        "distance_miles": 2.3,
+        "source": "dpc_frontier" | "manual" | "web_scrape",
+        "estimated_panel_size": null,
+        "monthly_price_range": "$75-150"
+      }
+    ]
+  - dpc_practice_count_in_radius
+  - fqhc_sites: [ ... ]
+  - retail_clinics: [ ... ]
+  - concierge_practices: [ ... ]
+  - market_saturation_estimate: "LOW" | "MODERATE" | "HIGH"
+  - unmet_demand_estimate: {
+      "addressable_population": 12500,
+      "existing_dpc_estimated_capacity": 1200,
+      "remaining_opportunity": 11300
+    }
+
+--------------------------------------------------------------------------------
+GET /api/v1/market-fit/compare
+--------------------------------------------------------------------------------
+Compare two or more locations side by side.
+
+Query Parameters:
+  - locations (list of location objects, max 5)
+  - provider_tier (str, default="tier1")
+
+Returns array of market-fit results, one per location, plus a
+comparison summary highlighting relative strengths/weaknesses.
+
+--------------------------------------------------------------------------------
+GET /api/v1/taxonomy-codes
+--------------------------------------------------------------------------------
+Returns the full NPI taxonomy configuration with tiering metadata.
+Useful for transparency — any consumer of the API can see exactly which
+provider types are counted in each tier.
+
+================================================================================
+SECTION 3: DATA SOURCES AND RETRIEVAL
+================================================================================
+
+Each data source should be implemented as a service class with:
+  - A method to fetch data for a given tract FIPS or list of tract FIPS codes
+  - Built-in caching (Redis preferred, in-memory fallback)
+  - Graceful degradation if a source is unavailable (return nulls, not errors)
+  - Data vintage tracking (when was the source data last updated)
+
+Source 1: Census ACS 5-Year Estimates
+  API: https://api.census.gov/data/{year}/acs/acs5
+  Key tables:
+    - B01001 (age/sex)
+    - B27001 (health insurance by age)
+    - B27010 (health insurance by type — employer, Medicaid, etc.)
+    - B19013 (median household income)
+    - B15003 (educational attainment)
+    - B25070/B25091 (housing cost burden)
+    - B23025 (employment status)
+  Geography: tract level
+  Auth: Free API key from api.census.gov/data/key_signup.html
+
+Source 2: CDC PLACES
+  API: https://data.cdc.gov/resource/{dataset-id}.json (Socrata)
+  Key measures: DIABETES, BPHIGH, OBESITY, COPD, DEPRESSION, CASTHMA,
+    ACCESS2 (no health insurance), CHECKUP (annual checkup), etc.
+  Geography: tract level
+  Auth: None required (Socrata open data)
+
+Source 3: CDC/ATSDR Social Vulnerability Index (SVI)
+  Download: https://www.atsdr.cdc.gov/placeandhealth/svi/data_documentation_download.html
+  Fields: RPL_THEMES (overall), RPL_THEME1 (socioeconomic),
+    RPL_THEME2 (household/disability), RPL_THEME3 (minority/language),
+    RPL_THEME4 (housing/transportation)
+  Geography: tract level
+  Auth: None (bulk download, load into local DB or file)
+
+Source 4: HRSA HPSA Data
+  API: https://data.hrsa.gov/api/
+  Also: https://data.hrsa.gov/data/download (bulk CSV)
+  Fields: HPSA score, designation type, status, discipline (primary care)
+  Geography: varies (geographic, population group, facility)
+  Auth: Free API token from data.hrsa.gov
+
+Source 5: NPI Registry (NPPES)
+  Bulk download: https://download.cms.gov/nppes/NPI_Files.html
+  Monthly full replacement file (~8GB CSV)
+  Strategy: Download monthly, filter by taxonomy codes in config,
+    geocode practice addresses, load into PostGIS or SQLite with
+    spatial index for radius queries.
+  Key fields: NPI, provider name, taxonomy code(s), practice address,
+    enumeration date, sole proprietor flag
+  Note: A provider can have multiple taxonomy codes. Use the primary
+    taxonomy (Healthcare Provider Taxonomy Code_1) for classification
+    but check all taxonomy fields for Tier 1 codes.
+
+Source 6: County Business Patterns
+  API: https://api.census.gov/data/{year}/cbp
+  Key tables: county and ZIP-level establishment counts by
+    employee size class and NAICS code
+  Geography: county and ZIP code (not tract — will need to
+    approximate tract-level from ZIP)
+  Auth: Same Census API key
+
+Source 7: CMS Provider Data
+  API: https://data.cms.gov/provider-data/
+  Use for: FQHC locations, hospital locations, ED utilization metrics
+  Format: Socrata JSON API
+  Auth: None required
+
+Source 8: DPC Practice Registry
+  No official federal source. Options:
+    - DPC Frontier mapper (https://www.dpcfrontier.com/mapper/)
+    - DPC Alliance member directory
+    - Hint Health practice directory
+    - Manual curation + community contributions
+  This is the weakest data layer. Start with manual Kansas City area
+  data and build out.
+
+================================================================================
+SECTION 4: SCORING METHODOLOGY
+================================================================================
+
+Each dimension produces a 0-100 score. The composite is a weighted average
+of the five dimensions.
+
+DEFAULT WEIGHTS (configurable per request):
+  demand:       0.25
+  supply_gap:   0.25
+  affordability: 0.20
+  employer:     0.20
+  competition:  0.10
+
+SCORING APPROACH: Percentile-based normalization against national
+tract-level distributions. For each indicator, compute the percentile
+rank of the market area's value relative to all US tracts, then combine
+within each dimension using indicator weights.
+
+--- DEMAND DIMENSION (weight: 0.25) ---
+
+Indicators and within-dimension weights:
+  - uninsured_rate: 0.25 (higher = more demand)
+  - chronic_disease_burden: 0.25 (composite of diabetes, hypertension,
+    obesity, COPD, depression — higher = more utilization need)
+  - working_age_population_density: 0.15 (higher = larger addressable market)
+  - ed_acsc_rate: 0.20 (higher = more redirectable demand)
+  - svi_socioeconomic_theme: 0.15 (higher vulnerability = more need,
+    but tension with affordability)
+
+Scoring direction: For most demand indicators, higher raw values = higher
+score, because they signal more unmet need. Exception: cap or penalize
+extremely high values (e.g., uninsured > 40%) because at that level
+the population may not be able to afford DPC either.
+
+--- SUPPLY GAP DIMENSION (weight: 0.25) ---
+
+Indicators:
+  - pcp_per_100k_inverse: 0.35 (fewer PCPs = bigger gap = higher score)
+  - hpsa_score: 0.30 (higher HPSA score = more underserved = higher score)
+  - nearest_pcp_distance: 0.15 (farther = bigger gap)
+  - fqhc_coverage_inverse: 0.20 (fewer FQHCs = less safety net competition)
+
+Note: HPSA designation is binary + scored 0-25. Convert to 0-100 scale.
+Non-HPSA areas get the HPSA component scored at 0 but can still score
+well on other supply indicators.
+
+--- AFFORDABILITY DIMENSION (weight: 0.20) ---
+
+Indicators:
+  - median_household_income: 0.35 (higher = more ability to pay $75-150/mo)
+  - dpc_as_pct_of_income: 0.30 (use $100/mo as reference; lower pct = higher score)
+  - employment_rate: 0.20 (higher = more stable income)
+  - housing_cost_burden_inverse: 0.15 (lower housing burden = more
+    discretionary income for DPC membership)
+
+Scoring direction: Higher income / lower cost burden = higher score.
+This dimension is in natural tension with the demand dimension — the
+populations with the highest need often have the lowest ability to pay.
+The composite captures this tension honestly.
+
+--- EMPLOYER OPPORTUNITY DIMENSION (weight: 0.20) ---
+
+Indicators:
+  - dpc_target_establishment_density: 0.35 (firms 10-249 employees per capita)
+  - low_benefit_industry_pct: 0.30 (higher pct in retail, food service,
+    construction, accommodation = more employers motivated to try DPC)
+  - median_wage_in_target_firms: 0.20 (mid-range wages optimal — too low
+    and employer can't afford DPC; too high and they have good benefits)
+  - small_business_growth_rate: 0.15 (if available from CBP year-over-year)
+
+--- COMPETITION/SATURATION DIMENSION (weight: 0.10) ---
+
+Indicators:
+  - existing_dpc_count_inverse: 0.40 (fewer existing = less saturated)
+  - retail_clinic_density_inverse: 0.20 (fewer = less competition)
+  - fqhc_site_density: 0.20 (more FQHCs = more free/low-cost competition)
+  - concierge_practice_density: 0.20 (fewer = less premium competition)
+
+Scoring direction: Less competition = higher score. Weight this dimension
+lowest because some competition can validate the market.
+
+COMPOSITE CALCULATION:
+  composite = (demand * w_d) + (supply_gap * w_s) + (affordability * w_a)
+              + (employer * w_e) + (competition * w_c)
+
+================================================================================
+SECTION 5: NARRATIVE GENERATION
+================================================================================
+
+The /market-fit endpoint includes a "narrative" field — a plain English
+summary generated via Claude API with a structured prompt:
+
+Prompt template:
+
+  You are a healthcare market analyst. Given the following DPC Market Fit
+  assessment data for {location}, write a 3-4 paragraph narrative summary
+  that a physician considering opening a DPC practice or an actuary sizing
+  a DPC market would find actionable.
+
+  Data:
+  {json_scores_and_indicators}
+
+  Guidelines:
+  - Lead with the headline: is this a good market for DPC? Why or why not?
+  - Highlight the strongest and weakest dimensions
+  - Call out specific tensions between dimensions (high need / low ability to pay)
+  - Include 2-3 specific, actionable recommendations
+  - Reference specific numbers from the data
+  - Keep it under 300 words
+  - Do not use bullet points
+  - Write in a direct, professional tone
+
+================================================================================
+SECTION 6: NPI TAXONOMY CONFIGURATION
+================================================================================
+
+Store as data/npi_taxonomy_config.json. Also returned by /taxonomy-codes
+endpoint for transparency.
+
+{
+  "version": "1.0.0",
+  "last_updated": "2026-03-02",
+  "methodology_notes": "Tier 1 = unambiguous primary care. Tier 2 = frequently functions as primary care but taxonomy is ambiguous. Tier 3 = contextual indicators, never counted in PCP supply.",
+  "tiers": {
+    "tier1": {
+      "label": "Core Primary Care",
+      "description": "Providers whose taxonomy code unambiguously indicates primary care practice",
+      "include_in_supply_default": true,
+      "codes": {
+        "physicians": [
+          {"code": "207Q00000X", "description": "Family Medicine"},
+          {"code": "207QA0000X", "description": "Adolescent Medicine (Family Medicine)"},
+          {"code": "207QA0505X", "description": "Adult Medicine (Family Medicine)"},
+          {"code": "207QG0300X", "description": "Geriatric Medicine (Family Medicine)"},
+          {"code": "207QS1201X", "description": "Sports Medicine (Family Medicine)"},
+          {"code": "207R00000X", "description": "Internal Medicine (General)"},
+          {"code": "207RA0000X", "description": "Adolescent Medicine (Internal Medicine)"},
+          {"code": "207RG0300X", "description": "Geriatric Medicine (Internal Medicine)"},
+          {"code": "208D00000X", "description": "General Practice"},
+          {"code": "208000000X", "description": "Pediatrics (General)"},
+          {"code": "2080A0000X", "description": "Adolescent Medicine (Pediatrics)"}
+        ],
+        "nurse_practitioners": [
+          {"code": "363LF0000X", "description": "Family Nurse Practitioner"},
+          {"code": "363LP0200X", "description": "Primary Care Nurse Practitioner"},
+          {"code": "363LA2200X", "description": "Adult Health Nurse Practitioner"},
+          {"code": "363LG0600X", "description": "Gerontology Nurse Practitioner"},
+          {"code": "363LP0222X", "description": "Pediatric Nurse Practitioner"}
+        ]
+      }
+    },
+    "tier2": {
+      "label": "Expanded Primary Care",
+      "description": "Providers who frequently function as PCPs but taxonomy does not guarantee primary care practice",
+      "include_in_supply_default": false,
+      "codes": {
+        "physician_assistants": [
+          {"code": "363A00000X", "description": "Physician Assistant"},
+          {"code": "363AM0700X", "description": "Medical Physician Assistant"}
+        ],
+        "nurse_practitioners_extended": [
+          {"code": "363LA2100X", "description": "Acute Care Nurse Practitioner"},
+          {"code": "363LP0808X", "description": "Psychiatric/Mental Health NP"}
+        ],
+        "clinical_nurse_specialists": [
+          {"code": "364SF0001X", "description": "Family Health CNS"},
+          {"code": "364SP0200X", "description": "Primary Care CNS"}
+        ],
+        "midwives": [
+          {"code": "367A00000X", "description": "Advanced Practice Midwife"},
+          {"code": "176B00000X", "description": "Midwife (non-nurse)"}
+        ]
+      },
+      "caveats": [
+        "Physician Assistants: taxonomy does not distinguish primary care PAs from surgical PAs. Cross-reference against practice address and supervising physician specialty when possible.",
+        "General Internal Medicine (207R00000X in Tier 1) includes some hospitalists and subspecialists who never updated their taxonomy. Consider filtering by practice setting if data allows.",
+        "Psychiatric NPs included because behavioral health integration is a DPC differentiator, but they do not typically manage primary care panels independently."
+      ]
+    },
+    "tier3_contextual": {
+      "label": "Contextual Indicators",
+      "description": "NOT counted as PCP supply. Surfaced as separate market context indicators.",
+      "include_in_supply_default": false,
+      "codes": {
+        "obgyn": [
+          {"code": "207V00000X", "description": "OB/GYN"},
+          {"code": "207VG0400X", "description": "Gynecology"}
+        ],
+        "preventive_medicine": [
+          {"code": "2083P0901X", "description": "Preventive Medicine, General"},
+          {"code": "2083P0500X", "description": "Preventive Medicine, Occupational-Environmental"}
+        ],
+        "hospitalists_exclude": [
+          {"code": "207RH0003X", "description": "Hospitalist — EXPLICITLY EXCLUDE from PCP counts"}
+        ],
+        "im_subspecialties_exclude": [
+          {"code": "207RC0000X", "description": "Cardiovascular Disease"},
+          {"code": "207RE0101X", "description": "Endocrinology, Diabetes, Metabolism"},
+          {"code": "207RR0500X", "description": "Rheumatology"},
+          {"code": "207RI0200X", "description": "Infectious Disease"},
+          {"code": "207RN0300X", "description": "Nephrology"},
+          {"code": "207RP1001X", "description": "Pulmonary Disease"},
+          {"code": "207RG0100X", "description": "Gastroenterology"},
+          {"code": "207RH0000X", "description": "Hematology"},
+          {"code": "207RI0008X", "description": "Hepatology"},
+          {"code": "207RM1200X", "description": "Magnetic Resonance Imaging"},
+          {"code": "207RX0202X", "description": "Medical Oncology"}
+        ],
+        "emergency_medicine": [
+          {"code": "207PE0004X", "description": "Emergency Medicine — proxy for urgent care presence"}
+        ]
+      },
+      "usage_notes": "These codes inform the competition/saturation dimension. OB/GYN density identifies markets where women have access but men/older adults do not. IM subspecialty codes help identify false positives in the 207R00000X count."
+    }
+  },
+  "facility_codes": {
+    "label": "Facility Type Indicators",
+    "description": "Organization-level NPI codes for competing/complementary facilities",
+    "codes": [
+      {"code": "261QF0400X", "description": "Federally Qualified Health Center"},
+      {"code": "261QR1300X", "description": "Rural Health Clinic"},
+      {"code": "261QU0200X", "description": "Urgent Care Clinic"},
+      {"code": "261QP2300X", "description": "Primary Care Clinic"},
+      {"code": "261QC1500X", "description": "Community Health Center"}
+    ]
+  }
+}
+
+================================================================================
+SECTION 7: IMPLEMENTATION NOTES
+================================================================================
+
+1. GEOCODING PIPELINE
+   - Primary: Census Geocoder API (free, no key needed)
+     https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress
+   - Returns tract FIPS directly
+   - Fallback: lat/lon to tract via FCC API or local shapefile
+   - For ZIP codes: use HUD USPS ZIP-Tract crosswalk file
+
+2. RADIUS QUERIES
+   - Find all tracts whose centroids fall within radius of target point
+   - Use Haversine distance or PostGIS ST_DWithin
+   - Population-weight all indicators across included tracts
+   - Tract centroid coordinates from Census TIGER/Line
+
+3. NPI DATA MANAGEMENT
+   - NPPES monthly file is ~8GB CSV. Strategy:
+     a. Download monthly full replacement file
+     b. Filter to taxonomy codes in config (all tiers)
+     c. Geocode practice addresses (batch via Census Geocoder)
+     d. Load into PostGIS table with spatial index
+     e. Query: SELECT * FROM providers WHERE ST_DWithin(geom, target, radius)
+   - MVP alternative: Use NPPES NPI Registry API for real-time lookups
+     (https://npiregistry.cms.hhs.gov/api/) — has rate limits, no spatial query
+
+4. CACHING STRATEGY
+   - Census ACS, CDC PLACES, SVI: cache aggressively (annual updates)
+   - NPI supply counts: cache per tract, refresh monthly
+   - CBP employer data: cache aggressively (annual updates)
+   - DPC practice registry: short TTL (most volatile data)
+   - Composite scores: cache with key of (tract_set + tier + weights hash)
+
+5. PROGRESSIVE DISCLOSURE
+   - /market-fit returns scores + summaries
+   - Dimensional detail endpoints return full decomposition
+   - Every score traceable: composite -> dimension -> indicator -> raw value -> source
+   - Mirrors SDOH API regulatory design: transparency keeps it CDS-exempt
+
+6. ERROR HANDLING
+   - If a data source is unavailable, mark dimension as "incomplete"
+   - Recalculate composite from available dimensions
+   - Never block full response because one source failed
+   - Include "data_completeness" field: 1.0 = all sources, <1.0 = partial
+
+7. REUSE FROM SDOH API
+   - Geocoder service: identical pattern, reuse directly
+   - Census ACS service: same API, different table selections
+   - CDC PLACES service: same API, different measure selections
+   - CDC SVI service: reuse entirely
+   - Caching layer: same infrastructure
+   - Score normalization utilities: same approach
+   - Narrative generation: same Claude API pattern, different prompt
+
+================================================================================
+SECTION 8: MVP PHASING
+================================================================================
+
+Phase 1 (Core):
+  - Geocoding pipeline (reuse from SDOH API)
+  - Census ACS integration (insurance, income, demographics)
+  - CDC PLACES integration (chronic disease prevalence)
+  - CDC SVI integration (reuse from SDOH API)
+  - Basic scoring engine with demand + affordability dimensions
+  - /market-fit endpoint with partial scoring
+
+Phase 2 (Supply Side):
+  - NPI data pipeline (download, filter, geocode, spatial index)
+  - HRSA HPSA data integration
+  - Supply gap dimension scoring
+  - /supply endpoint
+
+Phase 3 (Employer + Competition):
+  - County Business Patterns integration
+  - Employer opportunity dimension
+  - Manual DPC practice registry (start with KC metro)
+  - Competition dimension scoring
+  - /employer and /competition endpoints
+
+Phase 4 (Polish):
+  - Narrative generation via Claude API
+  - /compare endpoint
+  - /taxonomy-codes transparency endpoint
+  - Full caching layer
+  - API documentation (OpenAPI/Swagger)
+
+================================================================================
+SECTION 9: FUTURE ENHANCEMENTS
+================================================================================
+
+- Panel economics calculator: Given acuity mix, estimate sustainable
+  panel size and required monthly membership fee
+- Scenario modeling: "What if DPC captured 5% of uninsured in radius?"
+- Time-series: Track market fit scores year-over-year as data updates
+- SDOH API integration: Pull SDOH context alongside DPC market fit
+- Payer mix modeling: Estimate likely panel composition
+  (self-pay vs employer vs health share vs hybrid)
+- State regulatory overlay: Layer in DPC enabling legislation status
+- Wraparound cost modeling: Estimate paired HDHP or health share
+  costs for the geography based on specialist/hospital density and rates
+
+================================================================================
+END OF SPECIFICATION
+================================================================================

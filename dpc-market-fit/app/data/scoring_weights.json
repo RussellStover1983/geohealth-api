@@ -1,0 +1,40 @@
+{
+  "dimensions": {
+    "demand": 0.25,
+    "supply_gap": 0.25,
+    "affordability": 0.20,
+    "employer": 0.20,
+    "competition": 0.10
+  },
+  "demand_indicators": {
+    "uninsured_rate": 0.25,
+    "chronic_disease_burden": 0.25,
+    "working_age_population_density": 0.15,
+    "ed_acsc_rate": 0.20,
+    "svi_socioeconomic_theme": 0.15
+  },
+  "affordability_indicators": {
+    "median_household_income": 0.35,
+    "dpc_as_pct_of_income": 0.30,
+    "employment_rate": 0.20,
+    "housing_cost_burden_inverse": 0.15
+  },
+  "supply_gap_indicators": {
+    "pcp_per_100k_inverse": 0.35,
+    "hpsa_score": 0.30,
+    "nearest_pcp_distance": 0.15,
+    "fqhc_coverage_inverse": 0.20
+  },
+  "employer_indicators": {
+    "dpc_target_establishment_density": 0.35,
+    "low_benefit_industry_pct": 0.30,
+    "median_wage_in_target_firms": 0.20,
+    "small_business_growth_rate": 0.15
+  },
+  "competition_indicators": {
+    "existing_dpc_count_inverse": 0.40,
+    "retail_clinic_density_inverse": 0.20,
+    "fqhc_site_density": 0.20,
+    "concierge_practice_density": 0.20
+  }
+}

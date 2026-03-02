@@ -1,0 +1,102 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-03-02",
+  "methodology_notes": "Tier 1 = unambiguous primary care. Tier 2 = frequently functions as primary care but taxonomy is ambiguous. Tier 3 = contextual indicators, never counted in PCP supply.",
+  "tiers": {
+    "tier1": {
+      "label": "Core Primary Care",
+      "description": "Providers whose taxonomy code unambiguously indicates primary care practice",
+      "include_in_supply_default": true,
+      "codes": {
+        "physicians": [
+          {"code": "207Q00000X", "description": "Family Medicine"},
+          {"code": "207QA0000X", "description": "Adolescent Medicine (Family Medicine)"},
+          {"code": "207QA0505X", "description": "Adult Medicine (Family Medicine)"},
+          {"code": "207QG0300X", "description": "Geriatric Medicine (Family Medicine)"},
+          {"code": "207QS1201X", "description": "Sports Medicine (Family Medicine)"},
+          {"code": "207R00000X", "description": "Internal Medicine (General)"},
+          {"code": "207RA0000X", "description": "Adolescent Medicine (Internal Medicine)"},
+          {"code": "207RG0300X", "description": "Geriatric Medicine (Internal Medicine)"},
+          {"code": "208D00000X", "description": "General Practice"},
+          {"code": "208000000X", "description": "Pediatrics (General)"},
+          {"code": "2080A0000X", "description": "Adolescent Medicine (Pediatrics)"}
+        ],
+        "nurse_practitioners": [
+          {"code": "363LF0000X", "description": "Family Nurse Practitioner"},
+          {"code": "363LP0200X", "description": "Primary Care Nurse Practitioner"},
+          {"code": "363LA2200X", "description": "Adult Health Nurse Practitioner"},
+          {"code": "363LG0600X", "description": "Gerontology Nurse Practitioner"},
+          {"code": "363LP0222X", "description": "Pediatric Nurse Practitioner"}
+        ]
+      }
+    },
+    "tier2": {
+      "label": "Expanded Primary Care",
+      "description": "Providers who frequently function as PCPs but taxonomy does not guarantee primary care practice",
+      "include_in_supply_default": false,
+      "codes": {
+        "physician_assistants": [
+          {"code": "363A00000X", "description": "Physician Assistant"},
+          {"code": "363AM0700X", "description": "Medical Physician Assistant"}
+        ],
+        "nurse_practitioners_extended": [
+          {"code": "363LA2100X", "description": "Acute Care Nurse Practitioner"},
+          {"code": "363LP0808X", "description": "Psychiatric/Mental Health NP"}
+        ],
+        "clinical_nurse_specialists": [
+          {"code": "364SF0001X", "description": "Family Health CNS"},
+          {"code": "364SP0200X", "description": "Primary Care CNS"}
+        ],
+        "midwives": [
+          {"code": "367A00000X", "description": "Advanced Practice Midwife"},
+          {"code": "176B00000X", "description": "Midwife (non-nurse)"}
+        ]
+      }
+    },
+    "tier3_contextual": {
+      "label": "Contextual Indicators",
+      "description": "NOT counted as PCP supply. Surfaced as separate market context indicators.",
+      "include_in_supply_default": false,
+      "codes": {
+        "obgyn": [
+          {"code": "207V00000X", "description": "OB/GYN"},
+          {"code": "207VG0400X", "description": "Gynecology"}
+        ],
+        "preventive_medicine": [
+          {"code": "2083P0901X", "description": "Preventive Medicine, General"},
+          {"code": "2083P0500X", "description": "Preventive Medicine, Occupational-Environmental"}
+        ],
+        "hospitalists_exclude": [
+          {"code": "207RH0003X", "description": "Hospitalist — EXPLICITLY EXCLUDE from PCP counts"}
+        ],
+        "im_subspecialties_exclude": [
+          {"code": "207RC0000X", "description": "Cardiovascular Disease"},
+          {"code": "207RE0101X", "description": "Endocrinology, Diabetes, Metabolism"},
+          {"code": "207RR0500X", "description": "Rheumatology"},
+          {"code": "207RI0200X", "description": "Infectious Disease"},
+          {"code": "207RN0300X", "description": "Nephrology"},
+          {"code": "207RP1001X", "description": "Pulmonary Disease"},
+          {"code": "207RG0100X", "description": "Gastroenterology"},
+          {"code": "207RH0000X", "description": "Hematology"},
+          {"code": "207RI0008X", "description": "Hepatology"},
+          {"code": "207RM1200X", "description": "Magnetic Resonance Imaging"},
+          {"code": "207RX0202X", "description": "Medical Oncology"}
+        ],
+        "emergency_medicine": [
+          {"code": "207PE0004X", "description": "Emergency Medicine — proxy for urgent care presence"}
+        ]
+      }
+    }
+  },
+  "facility_codes": {
+    "label": "Facility Type Indicators",
+    "description": "Organization-level NPI codes for competing/complementary facilities",
+    "codes": [
+      {"code": "261QF0400X", "description": "Federally Qualified Health Center"},
+      {"code": "261QR1300X", "description": "Rural Health Clinic"},
+      {"code": "261QU0200X", "description": "Urgent Care Clinic"},
+      {"code": "261QP2300X", "description": "Primary Care Clinic"},
+      {"code": "261QC1500X", "description": "Community Health Center"}
+    ]
+  }
+}
