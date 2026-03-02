@@ -15,9 +15,12 @@ from app.models.response import (
     ResolvedLocation,
 )
 from app.services.census_acs import fetch_acs_data
+from app.services.census_cbp import fetch_cbp_data
 from app.services.cdc_places import fetch_places_data
 from app.services.cdc_svi import fetch_svi_data
 from app.services.geocoder import resolve_location
+from app.services.hrsa_hpsa import fetch_hpsa_data
+from app.services.npi_registry import fetch_npi_providers
 from app.services.scoring import (
     compute_composite,
     score_affordability,
@@ -85,17 +88,44 @@ async def get_market_fit(
     # Build input description
     input_desc = address or zip_code or tract_fips or f"({lat}, {lon})"
 
-    # Fetch data from all Phase 1 sources in parallel
+    # Fetch data from all sources
     acs = await fetch_acs_data(location.geoid)
     places = await fetch_places_data(location.geoid)
     svi = await fetch_svi_data(location.geoid)
 
+    # Phase 2 data sources
+    state_code = _state_fips_to_abbrev(location.state_fips) if location.state_fips else None
+    npi = None
+    hpsa = None
+    cbp = None
+
+    if state_code and location.state_fips and location.county_fips:
+        npi = await fetch_npi_providers(
+            state=state_code,
+            postal_code=zip_code,
+            tier=provider_tier.value,
+        )
+        if npi and acs and acs.total_population:
+            npi.total_population = acs.total_population
+
+        hpsa = await fetch_hpsa_data(
+            state_fips=location.state_fips,
+            county_fips=location.county_fips,
+        )
+        cbp = await fetch_cbp_data(
+            state_fips=location.state_fips,
+            county_fips=location.county_fips,
+        )
+
+    # Market population from ACS
+    market_pop = acs.total_population if acs else None
+
     # Score dimensions
     demand = score_demand(acs, places, svi)
     affordability = score_affordability(acs)
-    supply_gap = score_supply_gap()
-    employer = score_employer()
-    competition = score_competition()
+    supply_gap = score_supply_gap(npi, hpsa, market_pop)
+    employer = score_employer(cbp, acs)
+    competition = score_competition(npi, market_pop)
 
     dimension_scores: dict[str, DimensionScore] = {
         Dimension.DEMAND.value: demand,
@@ -115,9 +145,6 @@ async def get_market_fit(
     }
     composite = compute_composite(dimension_scores, weights)
 
-    # Market population from ACS
-    market_pop = acs.total_population if acs else None
-
     return MarketFitResponse(
         location=ResolvedLocation(
             input=input_desc,
@@ -135,5 +162,27 @@ async def get_market_fit(
             census_acs=f"{settings.acs_year} 5-Year",
             cdc_places="2024 Release",
             cdc_svi="2022",
+            npi="2026 Monthly" if npi else None,
+            cbp="2021" if cbp else None,
         ),
     )
+
+
+# State FIPS → abbreviation mapping (50 states + DC)
+_STATE_FIPS_MAP = {
+    "01": "AL", "02": "AK", "04": "AZ", "05": "AR", "06": "CA",
+    "08": "CO", "09": "CT", "10": "DE", "11": "DC", "12": "FL",
+    "13": "GA", "15": "HI", "16": "ID", "17": "IL", "18": "IN",
+    "19": "IA", "20": "KS", "21": "KY", "22": "LA", "23": "ME",
+    "24": "MD", "25": "MA", "26": "MI", "27": "MN", "28": "MS",
+    "29": "MO", "30": "MT", "31": "NE", "32": "NV", "33": "NH",
+    "34": "NJ", "35": "NM", "36": "NY", "37": "NC", "38": "ND",
+    "39": "OH", "40": "OK", "41": "OR", "42": "PA", "44": "RI",
+    "45": "SC", "46": "SD", "47": "TN", "48": "TX", "49": "UT",
+    "50": "VT", "51": "VA", "53": "WA", "54": "WV", "55": "WI",
+    "56": "WY",
+}
+
+
+def _state_fips_to_abbrev(fips: str) -> str | None:
+    return _STATE_FIPS_MAP.get(fips)

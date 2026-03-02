@@ -133,6 +133,78 @@ class DemandDetailResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Supply detail response
+# ---------------------------------------------------------------------------
+
+
+class SupplyDetailResponse(BaseModel):
+    """Detailed supply indicators for /api/v1/market-fit/supply."""
+
+    location: ResolvedLocation
+    pcp_count: int = Field(0, description="Primary care providers in the area")
+    pcp_per_100k: float | None = Field(
+        None, description="PCPs per 100,000 population"
+    )
+    national_benchmark_pcp_per_100k: float = Field(
+        75.0, description="National benchmark for PCPs per 100k"
+    )
+    is_hpsa: bool = Field(False, description="Is a Health Professional Shortage Area")
+    hpsa_score: float | None = Field(
+        None, description="HPSA score (0-25, higher = greater shortage)"
+    )
+    hpsa_type: str | None = Field(None, description="HPSA designation type")
+    fqhc_count: int = Field(0, description="FQHCs in the area")
+    urgent_care_count: int = Field(0, description="Urgent care clinics in the area")
+    rural_health_clinic_count: int = Field(0, description="Rural health clinics")
+    supply_gap_score: DimensionScore | None = None
+    data_vintage: DataVintage
+
+
+# ---------------------------------------------------------------------------
+# Employer detail response
+# ---------------------------------------------------------------------------
+
+
+class EmployerDetailResponse(BaseModel):
+    """Detailed employer indicators for /api/v1/market-fit/employer."""
+
+    location: ResolvedLocation
+    total_establishments: int = Field(0, description="Total business establishments")
+    target_establishments: int = Field(
+        0, description="Establishments with 10-249 employees (DPC target)"
+    )
+    target_establishment_pct: float | None = Field(
+        None, description="% of establishments in DPC target size range"
+    )
+    total_employees: int = Field(0, description="Total employees in the area")
+    avg_annual_wage: float | None = Field(None, description="Average annual wage ($)")
+    industry_breakdown: dict[str, int] = Field(
+        default_factory=dict, description="Establishments by industry"
+    )
+    employer_score: DimensionScore | None = None
+    data_vintage: DataVintage
+
+
+# ---------------------------------------------------------------------------
+# Competition detail response
+# ---------------------------------------------------------------------------
+
+
+class CompetitionDetailResponse(BaseModel):
+    """Detailed competition indicators for /api/v1/market-fit/competition."""
+
+    location: ResolvedLocation
+    fqhc_count: int = Field(0, description="FQHCs competing for underserved patients")
+    urgent_care_count: int = Field(0, description="Urgent care clinics nearby")
+    rural_health_clinic_count: int = Field(0, description="Rural health clinics nearby")
+    pcp_density_per_100k: float | None = Field(
+        None, description="PCP density per 100k — higher = more saturated"
+    )
+    competition_score: DimensionScore | None = None
+    data_vintage: DataVintage
+
+
+# ---------------------------------------------------------------------------
 # Error
 # ---------------------------------------------------------------------------
 

@@ -7,9 +7,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services.census_acs import ACSData
+from app.services.census_cbp import CBPData
 from app.services.cdc_places import PLACESData
 from app.services.cdc_svi import SVIData
 from app.services.geocoder import GeocodedLocation
+from app.services.hrsa_hpsa import HPSAData
+from app.services.npi_registry import NPIData
 
 
 def _mock_geocode_result():
@@ -76,6 +79,56 @@ def _mock_svi_data():
     })
 
 
+def _mock_npi_data():
+    return NPIData(
+        pcp_count=25,
+        pcp_details=[],
+        facility_counts={
+            "261QF0400X": 2,
+            "261QU0200X": 3,
+            "261QR1300X": 0,
+        },
+        total_population=5000,
+    )
+
+
+def _mock_hpsa_data():
+    return HPSAData(
+        is_hpsa=True,
+        hpsa_score=15.0,
+        hpsa_type="Geographic HPSA",
+        designation_type="Designated",
+        discipline="Primary Care",
+        designations=[],
+    )
+
+
+def _mock_cbp_data():
+    return CBPData(
+        total_establishments=500,
+        target_establishments=120,
+        total_employees=8000,
+        annual_payroll=400_000_000,  # $400M total → $50k avg wage
+        industry_breakdown={
+            "Professional, Scientific & Technical Services": 80,
+            "Health Care & Social Assistance": 60,
+        },
+    )
+
+
+# Shared mock patch paths for market_fit router
+_MF_PREFIX = "app.routers.market_fit"
+_MF_PATCHES = [
+    f"{_MF_PREFIX}.resolve_location",
+    f"{_MF_PREFIX}.fetch_acs_data",
+    f"{_MF_PREFIX}.fetch_places_data",
+    f"{_MF_PREFIX}.fetch_svi_data",
+    f"{_MF_PREFIX}.fetch_npi_providers",
+    f"{_MF_PREFIX}.fetch_hpsa_data",
+    f"{_MF_PREFIX}.fetch_cbp_data",
+]
+
+
 class TestHealthEndpoint:
     def test_health(self, client):
         resp = client.get("/health")
@@ -85,17 +138,24 @@ class TestHealthEndpoint:
 
 
 class TestMarketFitEndpoint:
-    @patch("app.routers.market_fit.fetch_svi_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.fetch_places_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.fetch_acs_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.resolve_location", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_svi_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_places_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_acs_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
     def test_market_fit_with_tract_fips(
-        self, mock_geo, mock_acs, mock_places, mock_svi, client
+        self, mock_geo, mock_acs, mock_places, mock_svi,
+        mock_npi, mock_hpsa, mock_cbp, client
     ):
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = _mock_acs_data()
         mock_places.return_value = _mock_places_data()
         mock_svi.return_value = _mock_svi_data()
+        mock_npi.return_value = _mock_npi_data()
+        mock_hpsa.return_value = _mock_hpsa_data()
+        mock_cbp.return_value = _mock_cbp_data()
 
         resp = client.get("/api/v1/market-fit?tract_fips=29095001100")
         assert resp.status_code == 200
@@ -119,17 +179,28 @@ class TestMarketFitEndpoint:
 
         assert data["location"]["primary_tract_fips"] == "29095001100"
 
-    @patch("app.routers.market_fit.fetch_svi_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.fetch_places_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.fetch_acs_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.resolve_location", new_callable=AsyncMock)
+        # Phase 2: supply_gap, employer, competition should have real scores
+        for dim in ["supply_gap", "employer", "competition"]:
+            assert data["dimensions"][dim]["data_completeness"] > 0
+
+    @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_svi_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_places_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_acs_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
     def test_market_fit_with_address(
-        self, mock_geo, mock_acs, mock_places, mock_svi, client
+        self, mock_geo, mock_acs, mock_places, mock_svi,
+        mock_npi, mock_hpsa, mock_cbp, client
     ):
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = _mock_acs_data()
         mock_places.return_value = _mock_places_data()
         mock_svi.return_value = _mock_svi_data()
+        mock_npi.return_value = _mock_npi_data()
+        mock_hpsa.return_value = _mock_hpsa_data()
+        mock_cbp.return_value = _mock_cbp_data()
 
         resp = client.get(
             "/api/v1/market-fit",
@@ -141,17 +212,24 @@ class TestMarketFitEndpoint:
         resp = client.get("/api/v1/market-fit")
         assert resp.status_code == 400
 
-    @patch("app.routers.market_fit.fetch_svi_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.fetch_places_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.fetch_acs_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.resolve_location", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_svi_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_places_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_acs_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
     def test_market_fit_custom_weights(
-        self, mock_geo, mock_acs, mock_places, mock_svi, client
+        self, mock_geo, mock_acs, mock_places, mock_svi,
+        mock_npi, mock_hpsa, mock_cbp, client
     ):
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = _mock_acs_data()
         mock_places.return_value = _mock_places_data()
         mock_svi.return_value = _mock_svi_data()
+        mock_npi.return_value = _mock_npi_data()
+        mock_hpsa.return_value = _mock_hpsa_data()
+        mock_cbp.return_value = _mock_cbp_data()
 
         resp = client.get(
             "/api/v1/market-fit",
@@ -168,18 +246,25 @@ class TestMarketFitEndpoint:
         data = resp.json()
         assert data["composite_score"]["weights_used"]["demand"] == 0.50
 
-    @patch("app.routers.market_fit.fetch_svi_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.fetch_places_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.fetch_acs_data", new_callable=AsyncMock)
-    @patch("app.routers.market_fit.resolve_location", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_svi_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_places_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_acs_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
     def test_market_fit_null_data_graceful(
-        self, mock_geo, mock_acs, mock_places, mock_svi, client
+        self, mock_geo, mock_acs, mock_places, mock_svi,
+        mock_npi, mock_hpsa, mock_cbp, client
     ):
         """API should degrade gracefully when data sources return None."""
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = None
         mock_places.return_value = None
         mock_svi.return_value = None
+        mock_npi.return_value = None
+        mock_hpsa.return_value = None
+        mock_cbp.return_value = None
 
         resp = client.get("/api/v1/market-fit?tract_fips=29095001100")
         assert resp.status_code == 200
@@ -187,6 +272,43 @@ class TestMarketFitEndpoint:
         # Should still return a response with placeholder/zero scores
         assert data["dimensions"]["demand"]["score"] == 0.0
         assert data["dimensions"]["demand"]["data_completeness"] == 0.0
+
+    @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_svi_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_places_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_acs_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
+    def test_market_fit_all_dimensions_scored(
+        self, mock_geo, mock_acs, mock_places, mock_svi,
+        mock_npi, mock_hpsa, mock_cbp, client
+    ):
+        """All five dimensions should have real scores with full data."""
+        mock_geo.return_value = _mock_geocode_result()
+        mock_acs.return_value = _mock_acs_data()
+        mock_places.return_value = _mock_places_data()
+        mock_svi.return_value = _mock_svi_data()
+        mock_npi.return_value = _mock_npi_data()
+        mock_hpsa.return_value = _mock_hpsa_data()
+        mock_cbp.return_value = _mock_cbp_data()
+
+        resp = client.get("/api/v1/market-fit?tract_fips=29095001100")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        for dim_name, dim_data in data["dimensions"].items():
+            assert 0 <= dim_data["score"] <= 100, f"{dim_name} score out of range"
+            assert dim_data["category"] in [
+                "WEAK", "MODERATE", "STRONG", "EXCELLENT"
+            ]
+            assert dim_data["data_completeness"] > 0, (
+                f"{dim_name} has no data completeness"
+            )
+
+        # Data vintage should include Phase 2 sources
+        assert data["data_vintage"]["npi"] is not None
+        assert data["data_vintage"]["cbp"] is not None
 
 
 class TestDemandEndpoint:
@@ -218,19 +340,136 @@ class TestDemandEndpoint:
         assert resp.status_code == 400
 
 
-class TestPhaseStubEndpoints:
-    def test_supply_returns_501(self, client):
+class TestSupplyEndpoint:
+    @patch("app.routers.supply.fetch_npi_providers", new_callable=AsyncMock)
+    @patch("app.routers.supply.fetch_hpsa_data", new_callable=AsyncMock)
+    @patch("app.routers.supply.fetch_acs_data", new_callable=AsyncMock)
+    @patch("app.routers.supply.resolve_location", new_callable=AsyncMock)
+    def test_supply_detail(
+        self, mock_geo, mock_acs, mock_hpsa, mock_npi, client
+    ):
+        mock_geo.return_value = _mock_geocode_result()
+        mock_acs.return_value = _mock_acs_data()
+        mock_npi.return_value = _mock_npi_data()
+        mock_hpsa.return_value = _mock_hpsa_data()
+
         resp = client.get("/api/v1/market-fit/supply?tract_fips=29095001100")
-        assert resp.status_code == 200  # Returns JSON body, not 501 HTTP status
+        assert resp.status_code == 200
         data = resp.json()
-        assert data["status_code"] == 501
 
-    def test_employer_returns_501(self, client):
+        assert data["pcp_count"] == 25
+        assert data["pcp_per_100k"] is not None
+        assert data["is_hpsa"] is True
+        assert data["hpsa_score"] == 15.0
+        assert data["fqhc_count"] == 2
+        assert data["urgent_care_count"] == 3
+        assert data["supply_gap_score"] is not None
+        assert data["supply_gap_score"]["data_completeness"] > 0
+
+    @patch("app.routers.supply.fetch_npi_providers", new_callable=AsyncMock)
+    @patch("app.routers.supply.fetch_hpsa_data", new_callable=AsyncMock)
+    @patch("app.routers.supply.fetch_acs_data", new_callable=AsyncMock)
+    @patch("app.routers.supply.resolve_location", new_callable=AsyncMock)
+    def test_supply_no_data_graceful(
+        self, mock_geo, mock_acs, mock_hpsa, mock_npi, client
+    ):
+        mock_geo.return_value = _mock_geocode_result()
+        mock_acs.return_value = None
+        mock_npi.return_value = None
+        mock_hpsa.return_value = None
+
+        resp = client.get("/api/v1/market-fit/supply?tract_fips=29095001100")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["pcp_count"] == 0
+        assert data["supply_gap_score"]["data_completeness"] == 0.0
+
+    def test_supply_no_location(self, client):
+        resp = client.get("/api/v1/market-fit/supply")
+        assert resp.status_code == 400
+
+
+class TestEmployerEndpoint:
+    @patch("app.routers.employer.fetch_cbp_data", new_callable=AsyncMock)
+    @patch("app.routers.employer.fetch_acs_data", new_callable=AsyncMock)
+    @patch("app.routers.employer.resolve_location", new_callable=AsyncMock)
+    def test_employer_detail(
+        self, mock_geo, mock_acs, mock_cbp, client
+    ):
+        mock_geo.return_value = _mock_geocode_result()
+        mock_acs.return_value = _mock_acs_data()
+        mock_cbp.return_value = _mock_cbp_data()
+
         resp = client.get("/api/v1/market-fit/employer?tract_fips=29095001100")
+        assert resp.status_code == 200
         data = resp.json()
-        assert data["status_code"] == 501
 
-    def test_competition_returns_501(self, client):
-        resp = client.get("/api/v1/market-fit/competition?tract_fips=29095001100")
+        assert data["total_establishments"] == 500
+        assert data["target_establishments"] == 120
+        assert data["target_establishment_pct"] is not None
+        assert data["total_employees"] == 8000
+        assert data["avg_annual_wage"] is not None
+        assert data["employer_score"] is not None
+        assert data["employer_score"]["data_completeness"] > 0
+
+    @patch("app.routers.employer.fetch_cbp_data", new_callable=AsyncMock)
+    @patch("app.routers.employer.fetch_acs_data", new_callable=AsyncMock)
+    @patch("app.routers.employer.resolve_location", new_callable=AsyncMock)
+    def test_employer_no_data_graceful(
+        self, mock_geo, mock_acs, mock_cbp, client
+    ):
+        mock_geo.return_value = _mock_geocode_result()
+        mock_acs.return_value = None
+        mock_cbp.return_value = None
+
+        resp = client.get("/api/v1/market-fit/employer?tract_fips=29095001100")
+        assert resp.status_code == 200
         data = resp.json()
-        assert data["status_code"] == 501
+        assert data["total_establishments"] == 0
+        assert data["employer_score"]["data_completeness"] == 0.0
+
+    def test_employer_no_location(self, client):
+        resp = client.get("/api/v1/market-fit/employer")
+        assert resp.status_code == 400
+
+
+class TestCompetitionEndpoint:
+    @patch("app.routers.competition.fetch_npi_providers", new_callable=AsyncMock)
+    @patch("app.routers.competition.fetch_acs_data", new_callable=AsyncMock)
+    @patch("app.routers.competition.resolve_location", new_callable=AsyncMock)
+    def test_competition_detail(
+        self, mock_geo, mock_acs, mock_npi, client
+    ):
+        mock_geo.return_value = _mock_geocode_result()
+        mock_acs.return_value = _mock_acs_data()
+        mock_npi.return_value = _mock_npi_data()
+
+        resp = client.get("/api/v1/market-fit/competition?tract_fips=29095001100")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert data["fqhc_count"] == 2
+        assert data["urgent_care_count"] == 3
+        assert data["pcp_density_per_100k"] is not None
+        assert data["competition_score"] is not None
+        assert data["competition_score"]["data_completeness"] > 0
+
+    @patch("app.routers.competition.fetch_npi_providers", new_callable=AsyncMock)
+    @patch("app.routers.competition.fetch_acs_data", new_callable=AsyncMock)
+    @patch("app.routers.competition.resolve_location", new_callable=AsyncMock)
+    def test_competition_no_data_graceful(
+        self, mock_geo, mock_acs, mock_npi, client
+    ):
+        mock_geo.return_value = _mock_geocode_result()
+        mock_acs.return_value = None
+        mock_npi.return_value = None
+
+        resp = client.get("/api/v1/market-fit/competition?tract_fips=29095001100")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["fqhc_count"] == 0
+        assert data["competition_score"]["data_completeness"] == 0.0
+
+    def test_competition_no_location(self, client):
+        resp = client.get("/api/v1/market-fit/competition")
+        assert resp.status_code == 400

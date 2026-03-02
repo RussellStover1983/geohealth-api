@@ -12,8 +12,11 @@ import logging
 from app.models.enums import Dimension, ScoreCategory
 from app.models.response import CompositeScore, DimensionScore
 from app.services.census_acs import ACSData
+from app.services.census_cbp import CBPData
 from app.services.cdc_places import PLACESData
 from app.services.cdc_svi import SVIData
+from app.services.hrsa_hpsa import HPSAData
+from app.services.npi_registry import NPIData
 from app.utils.normalization import clamp_score, min_max_score, weighted_average
 
 logger = logging.getLogger(__name__)
@@ -31,14 +34,27 @@ DEFAULT_WEIGHTS = {
 # These approximate the range across US census tracts.
 # In production, these would be computed from actual distributions.
 _NATIONAL_REFS = {
+    # Demand dimension
     "uninsured_rate": (2.0, 40.0),           # % uninsured
     "chronic_disease_burden": (5.0, 35.0),    # avg prevalence %
     "working_age_pop": (500, 10000),          # count
     "svi_socioeconomic": (0.0, 1.0),         # percentile 0-1
+    # Affordability dimension
     "median_income": (15000, 150000),         # dollars
     "dpc_pct_income": (0.5, 10.0),           # %
     "employment_rate": (60.0, 99.0),         # %
     "housing_burden": (10.0, 70.0),          # %
+    # Supply gap dimension
+    "pcp_per_100k": (20.0, 150.0),           # PCPs per 100k population
+    "hpsa_score": (0.0, 25.0),              # HPSA score 0-25
+    "fqhc_presence": (0, 5),                 # FQHC count in area
+    # Employer dimension
+    "target_estab_pct": (5.0, 50.0),         # % establishments 10-249 employees
+    "avg_annual_wage": (25000, 100000),       # average annual wage
+    "total_establishments": (100, 10000),     # total establishments in county
+    # Competition dimension
+    "competing_facilities": (0, 20),          # total competing facility count
+    "pcp_density": (20.0, 150.0),            # PCP density per 100k
 }
 
 
@@ -178,33 +194,182 @@ def score_affordability(acs: ACSData | None) -> DimensionScore:
     )
 
 
-def score_supply_gap() -> DimensionScore:
-    """Placeholder for Supply Gap dimension (Phase 2)."""
+def score_supply_gap(
+    npi: NPIData | None = None,
+    hpsa: HPSAData | None = None,
+    population: int | None = None,
+) -> DimensionScore:
+    """Score the Supply Gap dimension (0-100).
+
+    Higher score = larger supply gap = MORE opportunity for DPC.
+    Low PCP density and HPSA designation indicate unmet demand.
+    """
+    indicators: list[tuple[float, float]] = []
+    completeness_parts = 0
+    completeness_total = 3  # pcp_density, hpsa_score, fqhc_presence
+
+    # PCP per 100k (weight: 0.40) — INVERTED: fewer PCPs = higher opportunity
+    if npi and population and population > 0:
+        pcp_per_100k = npi.pcp_count / population * 100_000
+        score = min_max_score(
+            pcp_per_100k, *_NATIONAL_REFS["pcp_per_100k"], invert=True
+        )
+        indicators.append((score, 0.40))
+        completeness_parts += 1
+    elif npi and npi.pcp_per_100k is not None:
+        score = min_max_score(
+            npi.pcp_per_100k, *_NATIONAL_REFS["pcp_per_100k"], invert=True
+        )
+        indicators.append((score, 0.40))
+        completeness_parts += 1
+
+    # HPSA score (weight: 0.35) — higher HPSA score = greater shortage = opportunity
+    if hpsa and hpsa.is_hpsa and hpsa.hpsa_score is not None:
+        score = min_max_score(hpsa.hpsa_score, *_NATIONAL_REFS["hpsa_score"])
+        indicators.append((score, 0.35))
+        completeness_parts += 1
+    elif hpsa and not hpsa.is_hpsa:
+        # Not a shortage area — low supply gap score for this indicator
+        indicators.append((20.0, 0.35))
+        completeness_parts += 1
+
+    # FQHC presence (weight: 0.25) — INVERTED: more FQHCs = less gap
+    if npi:
+        fqhc_count = npi.fqhc_count
+        score = min_max_score(fqhc_count, *_NATIONAL_REFS["fqhc_presence"], invert=True)
+        indicators.append((score, 0.25))
+        completeness_parts += 1
+
+    if not indicators:
+        return DimensionScore(
+            score=50.0,
+            category=ScoreCategory.MODERATE,
+            summary="Insufficient data for supply gap scoring.",
+            data_completeness=0.0,
+        )
+
+    final = clamp_score(weighted_average(indicators))
+    completeness = completeness_parts / completeness_total
+
+    summary = _supply_gap_summary(npi, hpsa, final)
+
     return DimensionScore(
-        score=50.0,
-        category=ScoreCategory.MODERATE,
-        summary="Supply gap analysis requires NPI and HRSA data (Phase 2).",
-        data_completeness=0.0,
+        score=final,
+        category=ScoreCategory.from_score(final),
+        summary=summary,
+        data_completeness=round(completeness, 2),
     )
 
 
-def score_employer() -> DimensionScore:
-    """Placeholder for Employer Opportunity dimension (Phase 3)."""
+def score_employer(
+    cbp: CBPData | None = None,
+    acs: ACSData | None = None,
+) -> DimensionScore:
+    """Score the Employer Opportunity dimension (0-100).
+
+    Higher score = better employer landscape for DPC partnerships.
+    More mid-size employers, higher wages, robust business base.
+    """
+    indicators: list[tuple[float, float]] = []
+    completeness_parts = 0
+    completeness_total = 3  # target_estab_pct, avg_wage, total_estab
+
+    # DPC-target establishment % (weight: 0.40) — more mid-size = better
+    if cbp and cbp.target_establishment_pct is not None:
+        score = min_max_score(
+            cbp.target_establishment_pct, *_NATIONAL_REFS["target_estab_pct"]
+        )
+        indicators.append((score, 0.40))
+        completeness_parts += 1
+
+    # Average annual wage (weight: 0.35) — higher wages = can afford DPC benefit
+    if cbp and cbp.avg_annual_wage is not None:
+        score = min_max_score(
+            cbp.avg_annual_wage, *_NATIONAL_REFS["avg_annual_wage"]
+        )
+        indicators.append((score, 0.35))
+        completeness_parts += 1
+
+    # Total establishments (weight: 0.25) — larger business base = more prospects
+    if cbp and cbp.total_establishments > 0:
+        score = min_max_score(
+            cbp.total_establishments, *_NATIONAL_REFS["total_establishments"]
+        )
+        indicators.append((score, 0.25))
+        completeness_parts += 1
+
+    if not indicators:
+        return DimensionScore(
+            score=50.0,
+            category=ScoreCategory.MODERATE,
+            summary="Insufficient data for employer scoring.",
+            data_completeness=0.0,
+        )
+
+    final = clamp_score(weighted_average(indicators))
+    completeness = completeness_parts / completeness_total
+
+    summary = _employer_summary(cbp, final)
+
     return DimensionScore(
-        score=50.0,
-        category=ScoreCategory.MODERATE,
-        summary="Employer analysis requires County Business Patterns data (Phase 3).",
-        data_completeness=0.0,
+        score=final,
+        category=ScoreCategory.from_score(final),
+        summary=summary,
+        data_completeness=round(completeness, 2),
     )
 
 
-def score_competition() -> DimensionScore:
-    """Placeholder for Competition dimension (Phase 3)."""
+def score_competition(
+    npi: NPIData | None = None,
+    population: int | None = None,
+) -> DimensionScore:
+    """Score the Competition dimension (0-100).
+
+    Higher score = LESS competition = MORE opportunity.
+    Fewer competing facilities and lower PCP density = less saturation.
+    """
+    indicators: list[tuple[float, float]] = []
+    completeness_parts = 0
+    completeness_total = 2  # competing_facilities, pcp_density
+
+    # Competing facility count (weight: 0.50) — INVERTED: fewer = better
+    if npi:
+        total_competing = (
+            npi.fqhc_count + npi.urgent_care_count + npi.rural_health_clinic_count
+        )
+        score = min_max_score(
+            total_competing, *_NATIONAL_REFS["competing_facilities"], invert=True
+        )
+        indicators.append((score, 0.50))
+        completeness_parts += 1
+
+    # PCP density (weight: 0.50) — INVERTED: lower density = less competition
+    if npi and population and population > 0:
+        pcp_density = npi.pcp_count / population * 100_000
+        score = min_max_score(
+            pcp_density, *_NATIONAL_REFS["pcp_density"], invert=True
+        )
+        indicators.append((score, 0.50))
+        completeness_parts += 1
+
+    if not indicators:
+        return DimensionScore(
+            score=50.0,
+            category=ScoreCategory.MODERATE,
+            summary="Insufficient data for competition scoring.",
+            data_completeness=0.0,
+        )
+
+    final = clamp_score(weighted_average(indicators))
+    completeness = completeness_parts / completeness_total
+
+    summary = _competition_summary(npi, final)
+
     return DimensionScore(
-        score=50.0,
-        category=ScoreCategory.MODERATE,
-        summary="Competition analysis requires DPC registry data (Phase 3).",
-        data_completeness=0.0,
+        score=final,
+        category=ScoreCategory.from_score(final),
+        summary=summary,
+        data_completeness=round(completeness, 2),
     )
 
 
@@ -264,3 +429,54 @@ def _affordability_summary(acs: ACSData | None, score: float) -> str:
     category = ScoreCategory.from_score(score).value.lower()
     indicators = "; ".join(parts) if parts else "limited data available"
     return f"{category.capitalize()} affordability: {indicators}."
+
+
+def _supply_gap_summary(
+    npi: NPIData | None, hpsa: HPSAData | None, score: float
+) -> str:
+    parts: list[str] = []
+    if npi and npi.pcp_per_100k is not None:
+        parts.append(f"{npi.pcp_per_100k} PCPs per 100k (benchmark: 75)")
+    elif npi:
+        parts.append(f"{npi.pcp_count} PCPs found in area")
+    if hpsa and hpsa.is_hpsa:
+        hpsa_str = f"HPSA designated (score {hpsa.hpsa_score})" if hpsa.hpsa_score else "HPSA designated"
+        parts.append(hpsa_str)
+    elif hpsa:
+        parts.append("not a designated HPSA")
+    if npi and npi.fqhc_count > 0:
+        parts.append(f"{npi.fqhc_count} FQHC(s) in area")
+
+    category = ScoreCategory.from_score(score).value.lower()
+    indicators = "; ".join(parts) if parts else "limited data available"
+    return f"{category.capitalize()} supply gap: {indicators}."
+
+
+def _employer_summary(cbp: CBPData | None, score: float) -> str:
+    parts: list[str] = []
+    if cbp and cbp.target_establishments > 0:
+        parts.append(f"{cbp.target_establishments:,} mid-size employers (10-249 employees)")
+    if cbp and cbp.avg_annual_wage is not None:
+        parts.append(f"avg wage ${cbp.avg_annual_wage:,.0f}")
+    if cbp and cbp.total_establishments > 0:
+        parts.append(f"{cbp.total_establishments:,} total establishments")
+
+    category = ScoreCategory.from_score(score).value.lower()
+    indicators = "; ".join(parts) if parts else "limited data available"
+    return f"{category.capitalize()} employer opportunity: {indicators}."
+
+
+def _competition_summary(npi: NPIData | None, score: float) -> str:
+    parts: list[str] = []
+    if npi:
+        total = npi.fqhc_count + npi.urgent_care_count + npi.rural_health_clinic_count
+        if total > 0:
+            parts.append(f"{total} competing facilities")
+        else:
+            parts.append("no competing facilities found")
+        if npi.pcp_per_100k is not None:
+            parts.append(f"PCP density {npi.pcp_per_100k}/100k")
+
+    category = ScoreCategory.from_score(score).value.lower()
+    indicators = "; ".join(parts) if parts else "limited data available"
+    return f"{category.capitalize()} competition: {indicators}."
