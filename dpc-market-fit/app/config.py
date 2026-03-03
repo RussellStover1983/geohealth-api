@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # CDC SVI
     cdc_svi_dataset_id: str = "4d8n-kk8a"
 
+    # GeoHealth API (fallback for SVI, ACS, PLACES when primary sources fail)
+    geohealth_api_url: str = "https://geohealth-api-production.up.railway.app"
+
     # CORS
     cors_origins: str = "*"
 

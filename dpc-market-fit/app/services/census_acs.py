@@ -1,7 +1,11 @@
 """Census ACS 5-Year Estimates — demographics, insurance, income, employment.
 
-Fetches tract-level data from the Census Bureau API for the tables
-needed by the DPC Market Fit scoring engine.
+Primary: Census Bureau API (detail tables + subject tables).
+Fallback: GeoHealth API /api/v1/context/{geoid} which has ACS data pre-loaded.
+
+Note: Insurance data uses Subject Table S2701 (not B27010).
+B27010 subcells are age-specific cross-tabs and were producing incorrect totals.
+S2701 provides correct aggregate rates and counts.
 """
 
 from __future__ import annotations
@@ -15,19 +19,16 @@ from app.utils.cache import acs_cache
 
 logger = logging.getLogger(__name__)
 
-# ACS table variable mappings
+# --- Detail table variables (B-tables, fetched from acs/acs5) ---
 # B01001: Age/sex — total, male/female by 5-year cohorts
-# B27001: Health insurance by age — uninsured counts
-# B27010: Insurance type — employer, Medicaid, Medicare, uninsured
 # B19013: Median household income
 # B23025: Employment status
 # B25070: Gross rent as % of income (housing cost burden - renters)
 
-_VARIABLES = {
+_DETAIL_VARIABLES = {
     # Total population
     "B01001_001E": "total_population",
     # Working-age (18-64) — sum male 18-64 + female 18-64
-    # Male 18-19 through 60-64
     "B01001_007E": "male_18_19",
     "B01001_008E": "male_20",
     "B01001_009E": "male_21",
@@ -41,7 +42,6 @@ _VARIABLES = {
     "B01001_017E": "male_55_59",
     "B01001_018E": "male_60_61",
     "B01001_019E": "male_62_64",
-    # Female 18-19 through 60-64
     "B01001_031E": "female_18_19",
     "B01001_032E": "female_20",
     "B01001_033E": "female_21",
@@ -55,16 +55,10 @@ _VARIABLES = {
     "B01001_041E": "female_55_59",
     "B01001_042E": "female_60_61",
     "B01001_043E": "female_62_64",
-    # Insurance by type (B27010)
-    "B27010_001E": "insurance_universe",  # Civilian non-institutionalized
-    "B27010_017E": "employer_insurance",   # With employer-based
-    "B27010_033E": "medicaid",             # With Medicaid/means-tested
-    "B27010_050E": "medicare",             # With Medicare
-    "B27010_066E": "uninsured",            # No insurance
     # Median household income
     "B19013_001E": "median_household_income",
     # Employment status
-    "B23025_001E": "employment_universe",  # Pop 16+
+    "B23025_001E": "employment_universe",
     "B23025_003E": "civilian_labor_force",
     "B23025_005E": "unemployed",
     "B23025_002E": "in_labor_force",
@@ -74,6 +68,15 @@ _VARIABLES = {
     "B25070_008E": "renters_35_39pct",
     "B25070_009E": "renters_40_49pct",
     "B25070_010E": "renters_50pct_plus",
+}
+
+# --- Subject table variables (S-tables, fetched from acs/acs5/subject) ---
+# S2701: Health Insurance Coverage Status
+_SUBJECT_VARIABLES = {
+    "S2701_C01_001E": "insurance_universe",   # Total civilian noninstitutionalized
+    "S2701_C04_001E": "uninsured",            # Uninsured count
+    "S2701_C05_001E": "uninsured_pct",        # Uninsured percent (direct)
+    "S2701_C03_001E": "insured_pct",          # Insured percent
 }
 
 # Working-age variable keys (18-64)
@@ -110,6 +113,11 @@ class ACSData:
 
     @property
     def uninsured_rate(self) -> float | None:
+        # Prefer the direct percentage from S2701
+        pct = _safe_float(self.raw.get("uninsured_pct"))
+        if pct is not None:
+            return round(pct, 1)
+        # Fallback: compute from counts
         universe = _safe_int(self.raw.get("insurance_universe"))
         uninsured = _safe_int(self.raw.get("uninsured"))
         if universe and universe > 0 and uninsured is not None:
@@ -122,27 +130,20 @@ class ACSData:
 
     @property
     def employer_insured_rate(self) -> float | None:
-        universe = _safe_int(self.raw.get("insurance_universe"))
-        employer = _safe_int(self.raw.get("employer_insurance"))
-        if universe and universe > 0 and employer is not None:
-            return round(employer / universe * 100, 1)
+        # From S2701 insured_pct (private + public combined);
+        # we don't have employer-specific from subject table, return insured %
+        pct = _safe_float(self.raw.get("insured_pct"))
+        if pct is not None:
+            return round(pct, 1)
         return None
 
     @property
     def medicaid_rate(self) -> float | None:
-        universe = _safe_int(self.raw.get("insurance_universe"))
-        medicaid = _safe_int(self.raw.get("medicaid"))
-        if universe and universe > 0 and medicaid is not None:
-            return round(medicaid / universe * 100, 1)
-        return None
+        return _safe_float(self.raw.get("medicaid_pct"))
 
     @property
     def medicare_rate(self) -> float | None:
-        universe = _safe_int(self.raw.get("insurance_universe"))
-        medicare = _safe_int(self.raw.get("medicare"))
-        if universe and universe > 0 and medicare is not None:
-            return round(medicare / universe * 100, 1)
-        return None
+        return _safe_float(self.raw.get("medicare_pct"))
 
     @property
     def unemployment_rate(self) -> float | None:
@@ -181,20 +182,11 @@ class ACSData:
         return None
 
 
-async def fetch_acs_data(geoid: str) -> ACSData | None:
-    """Fetch ACS data for a single 11-digit tract GEOID.
-
-    Returns None if the Census API is unreachable or returns no data.
-    """
-    cached = acs_cache.get(f"acs:{geoid}")
-    if cached is not None:
-        return cached
-
-    state = geoid[:2]
-    county = geoid[2:5]
-    tract = geoid[5:]
-
-    variables = ",".join(_VARIABLES.keys())
+async def _fetch_census_detail(
+    state: str, county: str, tract: str, client: httpx.AsyncClient
+) -> dict[str, int | float | None]:
+    """Fetch detail table variables (B-tables)."""
+    variables = ",".join(_DETAIL_VARIABLES.keys())
     url = f"https://api.census.gov/data/{settings.acs_year}/acs/acs5"
     params: dict[str, str] = {
         "get": variables,
@@ -204,33 +196,136 @@ async def fetch_acs_data(geoid: str) -> ACSData | None:
     if settings.census_api_key:
         params["key"] = settings.census_api_key
 
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.get(url, params=params)
-            resp.raise_for_status()
+    resp = await client.get(url, params=params)
+    resp.raise_for_status()
+    rows = resp.json()
+    if len(rows) < 2:
+        return {}
 
-        rows = resp.json()
-        if len(rows) < 2:
-            logger.warning("No ACS data returned for tract %s", geoid)
+    header = rows[0]
+    values = rows[1]
+    raw = dict(zip(header, values))
+    parsed: dict[str, int | float | None] = {}
+    for var_code, name in _DETAIL_VARIABLES.items():
+        parsed[name] = _parse_census_value(raw.get(var_code))
+    return parsed
+
+
+async def _fetch_census_subject(
+    state: str, county: str, tract: str, client: httpx.AsyncClient
+) -> dict[str, int | float | None]:
+    """Fetch subject table variables (S-tables) — insurance rates."""
+    variables = ",".join(_SUBJECT_VARIABLES.keys())
+    url = f"https://api.census.gov/data/{settings.acs_year}/acs/acs5/subject"
+    params: dict[str, str] = {
+        "get": variables,
+        "for": f"tract:{tract}",
+        "in": f"state:{state} county:{county}",
+    }
+    if settings.census_api_key:
+        params["key"] = settings.census_api_key
+
+    resp = await client.get(url, params=params)
+    resp.raise_for_status()
+    rows = resp.json()
+    if len(rows) < 2:
+        return {}
+
+    header = rows[0]
+    values = rows[1]
+    raw = dict(zip(header, values))
+    parsed: dict[str, int | float | None] = {}
+    for var_code, name in _SUBJECT_VARIABLES.items():
+        parsed[name] = _parse_census_value(raw.get(var_code))
+    return parsed
+
+
+async def _fetch_acs_from_geohealth(geoid: str) -> ACSData | None:
+    """Fallback: fetch ACS-equivalent data from the GeoHealth API context endpoint."""
+    url = f"{settings.geohealth_api_url}/api/v1/context/{geoid}"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return None
+
+        data = resp.json()
+        raw: dict[str, int | float | None] = {}
+
+        raw["total_population"] = _parse_geohealth_val(data.get("total_population"))
+        raw["median_household_income"] = _parse_geohealth_val(
+            data.get("median_household_income")
+        )
+
+        # GeoHealth provides uninsured_rate directly (from S2701)
+        uninsured_rate = data.get("uninsured_rate")
+        if uninsured_rate is not None:
+            raw["uninsured_pct"] = float(uninsured_rate)
+            pop = raw.get("total_population")
+            if pop and pop > 0:
+                raw["insurance_universe"] = int(pop)
+                raw["uninsured"] = int(float(uninsured_rate) / 100 * int(pop))
+
+        unemp_rate = data.get("unemployment_rate")
+        pop = raw.get("total_population")
+        if unemp_rate is not None and pop and pop > 0:
+            labor_force = int(int(pop) * 0.65)
+            raw["civilian_labor_force"] = labor_force
+            raw["unemployed"] = int(float(unemp_rate) / 100 * labor_force)
+            raw["employment_universe"] = labor_force
+            raw["in_labor_force"] = labor_force
+
+        if not raw.get("total_population"):
             return None
 
-        header = rows[0]
-        values = rows[1]
-        raw_census = dict(zip(header, values))
-
-        # Map Census variable names to our friendly names
-        parsed: dict[str, int | float | None] = {}
-        for var_code, friendly_name in _VARIABLES.items():
-            val = raw_census.get(var_code)
-            parsed[friendly_name] = _parse_census_value(val)
-
-        result = ACSData(parsed)
-        acs_cache.set(f"acs:{geoid}", result)
-        return result
+        return ACSData(raw)
 
     except Exception:
-        logger.exception("Failed to fetch ACS data for tract %s", geoid)
+        logger.exception("GeoHealth API fallback failed for ACS tract %s", geoid)
         return None
+
+
+async def fetch_acs_data(geoid: str) -> ACSData | None:
+    """Fetch ACS data for a single 11-digit tract GEOID.
+
+    Makes two Census API calls (detail + subject tables), merges results.
+    Falls back to GeoHealth API if Census fails.
+    """
+    cached = acs_cache.get(f"acs:{geoid}")
+    if cached is not None:
+        return cached
+
+    state = geoid[:2]
+    county = geoid[2:5]
+    tract = geoid[5:]
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            detail = await _fetch_census_detail(state, county, tract, client)
+            subject = await _fetch_census_subject(state, county, tract, client)
+
+        if not detail and not subject:
+            logger.info(
+                "No ACS data from Census for tract %s, trying GeoHealth API", geoid
+            )
+        else:
+            # Merge detail + subject results
+            parsed = {**detail, **subject}
+            result = ACSData(parsed)
+            acs_cache.set(f"acs:{geoid}", result)
+            return result
+
+    except Exception:
+        logger.info(
+            "Census ACS request failed for tract %s, trying GeoHealth API fallback",
+            geoid,
+        )
+
+    # Fallback to GeoHealth API
+    result = await _fetch_acs_from_geohealth(geoid)
+    if result is not None:
+        acs_cache.set(f"acs:{geoid}", result)
+    return result
 
 
 async def fetch_acs_multi(geoids: list[str]) -> dict[str, ACSData | None]:
@@ -247,7 +342,21 @@ def _parse_census_value(val: str | int | float | None) -> int | float | None:
         return None
     try:
         num = float(val)
-        # Census uses negative values as error codes
+        if num < 0:
+            return None
+        if num == int(num):
+            return int(num)
+        return num
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_geohealth_val(val: int | float | str | None) -> int | float | None:
+    """Parse a value from GeoHealth API response."""
+    if val is None:
+        return None
+    try:
+        num = float(val)
         if num < 0:
             return None
         if num == int(num):
@@ -267,3 +376,35 @@ def _safe_float(val: int | float | None) -> float | None:
     if val is None:
         return None
     return float(val)
+
+
+async def fetch_county_population(state_fips: str, county_fips: str) -> int | None:
+    """Fetch total population for a county from Census ACS."""
+    cache_key = f"county_pop:{state_fips}{county_fips}"
+    cached = acs_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    url = f"https://api.census.gov/data/{settings.acs_year}/acs/acs5"
+    params = {
+        "get": "B01003_001E",
+        "for": f"county:{county_fips}",
+        "in": f"state:{state_fips}",
+    }
+    if settings.census_api_key:
+        params["key"] = settings.census_api_key
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url, params=params)
+            resp.raise_for_status()
+        rows = resp.json()
+        if len(rows) >= 2:
+            pop = _safe_int(_coerce_number(rows[1][0]))
+            if pop and pop > 0:
+                acs_cache.set(cache_key, pop)
+                return pop
+    except Exception:
+        logger.warning("County population fetch failed for %s%s", state_fips, county_fips, exc_info=True)
+
+    return None

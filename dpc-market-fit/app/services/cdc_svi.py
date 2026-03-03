@@ -1,6 +1,7 @@
 """CDC/ATSDR Social Vulnerability Index — tract-level vulnerability themes.
 
-Uses the Socrata Open Data API to fetch SVI percentile rankings.
+Primary: Socrata Open Data API (dataset 4d8n-kk8a).
+Fallback: GeoHealth API /api/v1/context/{geoid} which has SVI data pre-loaded.
 """
 
 from __future__ import annotations
@@ -56,15 +57,57 @@ class SVIData:
         return self.themes.get("rpl_themes")
 
 
+async def _fetch_svi_from_geohealth(geoid: str) -> SVIData | None:
+    """Fallback: fetch SVI data from the GeoHealth API context endpoint."""
+    url = f"{settings.geohealth_api_url}/api/v1/context/{geoid}"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                logger.warning(
+                    "GeoHealth API returned %d for tract %s", resp.status_code, geoid
+                )
+                return None
+
+        data = resp.json()
+        svi_themes = data.get("svi_themes")
+        if not svi_themes or not isinstance(svi_themes, dict):
+            return None
+
+        themes: dict[str, float | None] = {}
+        for field in _SVI_FIELDS:
+            val = svi_themes.get(field)
+            if val is not None:
+                try:
+                    parsed = float(val)
+                    themes[field] = parsed if parsed >= 0 else None
+                except (ValueError, TypeError):
+                    themes[field] = None
+            else:
+                themes[field] = None
+
+        # Only return if we got at least one theme
+        if all(v is None for v in themes.values()):
+            return None
+
+        return SVIData(themes)
+
+    except Exception:
+        logger.exception("GeoHealth API fallback failed for SVI tract %s", geoid)
+        return None
+
+
 async def fetch_svi_data(geoid: str) -> SVIData | None:
     """Fetch SVI data for a tract GEOID.
 
-    Returns None if the API is unreachable or returns no data.
+    Tries Socrata first, falls back to GeoHealth API if Socrata fails.
+    Returns None if both sources are unreachable or return no data.
     """
     cached = svi_cache.get(f"svi:{geoid}")
     if cached is not None:
         return cached
 
+    # Try Socrata first
     url = f"https://data.cdc.gov/resource/{settings.cdc_svi_dataset_id}.json"
     fields = ",".join(_SVI_FIELDS)
     params: dict[str, str] = {
@@ -81,31 +124,39 @@ async def fetch_svi_data(geoid: str) -> SVIData | None:
             resp.raise_for_status()
 
         rows = resp.json()
-        if not rows:
-            logger.warning("No SVI data for tract %s", geoid)
-            return None
-
-        row = rows[0]
-        themes: dict[str, float | None] = {}
-        for field in _SVI_FIELDS:
-            val = row.get(field)
-            if val is not None:
-                try:
-                    parsed = float(val)
-                    # SVI uses -999 as a sentinel for missing data
-                    themes[field] = parsed if parsed >= 0 else None
-                except (ValueError, TypeError):
+        if rows and isinstance(rows, list) and len(rows) > 0:
+            row = rows[0]
+            themes: dict[str, float | None] = {}
+            for field in _SVI_FIELDS:
+                val = row.get(field)
+                if val is not None:
+                    try:
+                        parsed = float(val)
+                        # SVI uses -999 as a sentinel for missing data
+                        themes[field] = parsed if parsed >= 0 else None
+                    except (ValueError, TypeError):
+                        themes[field] = None
+                else:
                     themes[field] = None
-            else:
-                themes[field] = None
 
-        result = SVIData(themes)
-        svi_cache.set(f"svi:{geoid}", result)
-        return result
+            result = SVIData(themes)
+            svi_cache.set(f"svi:{geoid}", result)
+            return result
+
+        # Socrata returned empty — fall through to GeoHealth fallback
+        logger.info("No SVI data from Socrata for tract %s, trying GeoHealth API", geoid)
 
     except Exception:
-        logger.exception("Failed to fetch SVI data for tract %s", geoid)
-        return None
+        logger.info(
+            "Socrata SVI request failed for tract %s, trying GeoHealth API fallback",
+            geoid,
+        )
+
+    # Fallback to GeoHealth API
+    result = await _fetch_svi_from_geohealth(geoid)
+    if result is not None:
+        svi_cache.set(f"svi:{geoid}", result)
+    return result
 
 
 async def fetch_svi_multi(geoids: list[str]) -> dict[str, SVIData | None]:

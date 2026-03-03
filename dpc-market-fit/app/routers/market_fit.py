@@ -14,13 +14,14 @@ from app.models.response import (
     MarketFitResponse,
     ResolvedLocation,
 )
-from app.services.census_acs import fetch_acs_data
+from app.services.census_acs import fetch_acs_data, fetch_county_population
 from app.services.census_cbp import fetch_cbp_data
 from app.services.cdc_places import fetch_places_data
 from app.services.cdc_svi import fetch_svi_data
 from app.services.geocoder import resolve_location
 from app.services.hrsa_hpsa import fetch_hpsa_data
 from app.services.npi_registry import fetch_npi_providers
+from app.services.npi_tract_lookup import lookup_tract_npi
 from app.services.scoring import (
     compute_composite,
     score_affordability,
@@ -100,17 +101,6 @@ async def get_market_fit(
     cbp = None
 
     if state_code and location.state_fips and location.county_fips:
-        effective_postal = zip_code or location.postal_code
-        effective_city = location.city if not effective_postal else None
-        npi = await fetch_npi_providers(
-            state=state_code,
-            city=effective_city,
-            postal_code=effective_postal,
-            tier=provider_tier.value,
-        )
-        if npi and acs and acs.total_population:
-            npi.total_population = acs.total_population
-
         hpsa = await fetch_hpsa_data(
             state_fips=location.state_fips,
             county_fips=location.county_fips,
@@ -120,15 +110,69 @@ async def get_market_fit(
             county_fips=location.county_fips,
         )
 
-    # Market population from ACS
+        # Try tract-level CSV data first (from NPPES bulk ETL)
+        npi = lookup_tract_npi(location.geoid)
+
+        if npi:
+            # Tract-level data — use ACS tract population for density
+            if acs and acs.total_population:
+                npi.total_population = acs.total_population
+        else:
+            # Fall back to NPI Registry API (city-level approximation)
+            if zip_code:
+                effective_postal = zip_code
+                effective_city = None
+            elif location.city:
+                effective_postal = None
+                effective_city = location.city
+            else:
+                effective_postal = location.postal_code
+                effective_city = None
+            npi = await fetch_npi_providers(
+                state=state_code,
+                city=effective_city,
+                postal_code=effective_postal,
+                tier=provider_tier.value,
+            )
+
+            # Use county population for NPI density when search scope is city-level
+            if npi and effective_city:
+                county_pop = await fetch_county_population(
+                    location.state_fips, location.county_fips
+                )
+                if not county_pop and cbp and cbp.total_employees:
+                    # Estimate county pop from CBP employees (~45% of pop is employed)
+                    county_pop = int(cbp.total_employees / 0.45)
+                if county_pop:
+                    npi.total_population = county_pop
+            elif npi and acs and acs.total_population:
+                npi.total_population = acs.total_population
+
+    # Population for scoring — county when NPI is city-scoped, else tract
+    npi_pop = npi.total_population if npi else None
     market_pop = acs.total_population if acs else None
+
+    # Detect non-existent tract (all primary sources returned None)
+    _all_sources_empty = acs is None and places is None and svi is None
+    _nonexistent_note = ""
+    if _all_sources_empty:
+        _nonexistent_note = (
+            " Census tract may not exist in current geography"
+            " (e.g., redistricted after 2020 Census)."
+        )
 
     # Score dimensions
     demand = score_demand(acs, places, svi)
     affordability = score_affordability(acs)
-    supply_gap = score_supply_gap(npi, hpsa, market_pop)
+    supply_gap = score_supply_gap(npi, hpsa, npi_pop)
     employer = score_employer(cbp, acs)
-    competition = score_competition(npi, market_pop)
+    competition = score_competition(npi, npi_pop)
+
+    # Append non-existent tract note to dimension summaries
+    if _nonexistent_note:
+        demand.summary += _nonexistent_note
+        affordability.summary += _nonexistent_note
+        supply_gap.summary += _nonexistent_note
 
     dimension_scores: dict[str, DimensionScore] = {
         Dimension.DEMAND.value: demand,

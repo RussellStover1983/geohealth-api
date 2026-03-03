@@ -126,6 +126,7 @@ _MF_PATCHES = [
     f"{_MF_PREFIX}.fetch_npi_providers",
     f"{_MF_PREFIX}.fetch_hpsa_data",
     f"{_MF_PREFIX}.fetch_cbp_data",
+    f"{_MF_PREFIX}.lookup_tract_npi",
 ]
 
 
@@ -138,6 +139,7 @@ class TestHealthEndpoint:
 
 
 class TestMarketFitEndpoint:
+    @patch(f"{_MF_PREFIX}.lookup_tract_npi", return_value=None)
     @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
@@ -147,7 +149,7 @@ class TestMarketFitEndpoint:
     @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
     def test_market_fit_with_tract_fips(
         self, mock_geo, mock_acs, mock_places, mock_svi,
-        mock_npi, mock_hpsa, mock_cbp, client
+        mock_npi, mock_hpsa, mock_cbp, mock_tract_npi, client
     ):
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = _mock_acs_data()
@@ -183,6 +185,7 @@ class TestMarketFitEndpoint:
         for dim in ["supply_gap", "employer", "competition"]:
             assert data["dimensions"][dim]["data_completeness"] > 0
 
+    @patch(f"{_MF_PREFIX}.lookup_tract_npi", return_value=None)
     @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
@@ -192,7 +195,7 @@ class TestMarketFitEndpoint:
     @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
     def test_market_fit_with_address(
         self, mock_geo, mock_acs, mock_places, mock_svi,
-        mock_npi, mock_hpsa, mock_cbp, client
+        mock_npi, mock_hpsa, mock_cbp, mock_tract_npi, client
     ):
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = _mock_acs_data()
@@ -212,6 +215,7 @@ class TestMarketFitEndpoint:
         resp = client.get("/api/v1/market-fit")
         assert resp.status_code == 400
 
+    @patch(f"{_MF_PREFIX}.lookup_tract_npi", return_value=None)
     @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
@@ -221,7 +225,7 @@ class TestMarketFitEndpoint:
     @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
     def test_market_fit_custom_weights(
         self, mock_geo, mock_acs, mock_places, mock_svi,
-        mock_npi, mock_hpsa, mock_cbp, client
+        mock_npi, mock_hpsa, mock_cbp, mock_tract_npi, client
     ):
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = _mock_acs_data()
@@ -246,6 +250,7 @@ class TestMarketFitEndpoint:
         data = resp.json()
         assert data["composite_score"]["weights_used"]["demand"] == 0.50
 
+    @patch(f"{_MF_PREFIX}.lookup_tract_npi", return_value=None)
     @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
@@ -255,7 +260,7 @@ class TestMarketFitEndpoint:
     @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
     def test_market_fit_null_data_graceful(
         self, mock_geo, mock_acs, mock_places, mock_svi,
-        mock_npi, mock_hpsa, mock_cbp, client
+        mock_npi, mock_hpsa, mock_cbp, mock_tract_npi, client
     ):
         """API should degrade gracefully when data sources return None."""
         mock_geo.return_value = _mock_geocode_result()
@@ -273,6 +278,7 @@ class TestMarketFitEndpoint:
         assert data["dimensions"]["demand"]["score"] == 0.0
         assert data["dimensions"]["demand"]["data_completeness"] == 0.0
 
+    @patch(f"{_MF_PREFIX}.lookup_tract_npi", return_value=None)
     @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
@@ -282,7 +288,7 @@ class TestMarketFitEndpoint:
     @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
     def test_market_fit_all_dimensions_scored(
         self, mock_geo, mock_acs, mock_places, mock_svi,
-        mock_npi, mock_hpsa, mock_cbp, client
+        mock_npi, mock_hpsa, mock_cbp, mock_tract_npi, client
     ):
         """All five dimensions should have real scores with full data."""
         mock_geo.return_value = _mock_geocode_result()
@@ -309,6 +315,44 @@ class TestMarketFitEndpoint:
         # Data vintage should include Phase 2 sources
         assert data["data_vintage"]["npi"] is not None
         assert data["data_vintage"]["cbp"] is not None
+
+    @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_svi_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_places_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_acs_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
+    def test_market_fit_tract_level_npi(
+        self, mock_geo, mock_acs, mock_places, mock_svi,
+        mock_npi_api, mock_hpsa, mock_cbp, client
+    ):
+        """When tract-level CSV data is available, API fallback is skipped."""
+        mock_geo.return_value = _mock_geocode_result()
+        mock_acs.return_value = _mock_acs_data()
+        mock_places.return_value = _mock_places_data()
+        mock_svi.return_value = _mock_svi_data()
+        mock_hpsa.return_value = _mock_hpsa_data()
+        mock_cbp.return_value = _mock_cbp_data()
+
+        tract_npi = NPIData(
+            pcp_count=15,
+            facility_counts={"261QF0400X": 1, "261QU0200X": 2, "261QR1300X": 0},
+            is_tract_level=True,
+        )
+
+        with patch(f"{_MF_PREFIX}.lookup_tract_npi", return_value=tract_npi):
+            resp = client.get("/api/v1/market-fit?tract_fips=29095001100")
+
+        assert resp.status_code == 200
+        data = resp.json()
+
+        # NPI API should NOT be called when tract-level data is available
+        mock_npi_api.assert_not_called()
+
+        # Scores should still be calculated
+        assert data["dimensions"]["supply_gap"]["data_completeness"] > 0
+        assert data["dimensions"]["competition"]["data_completeness"] > 0
 
 
 class TestDemandEndpoint:
@@ -341,12 +385,13 @@ class TestDemandEndpoint:
 
 
 class TestSupplyEndpoint:
+    @patch("app.routers.supply.lookup_tract_npi", return_value=None)
     @patch("app.routers.supply.fetch_npi_providers", new_callable=AsyncMock)
     @patch("app.routers.supply.fetch_hpsa_data", new_callable=AsyncMock)
     @patch("app.routers.supply.fetch_acs_data", new_callable=AsyncMock)
     @patch("app.routers.supply.resolve_location", new_callable=AsyncMock)
     def test_supply_detail(
-        self, mock_geo, mock_acs, mock_hpsa, mock_npi, client
+        self, mock_geo, mock_acs, mock_hpsa, mock_npi, mock_tract_npi, client
     ):
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = _mock_acs_data()
@@ -366,12 +411,13 @@ class TestSupplyEndpoint:
         assert data["supply_gap_score"] is not None
         assert data["supply_gap_score"]["data_completeness"] > 0
 
+    @patch("app.routers.supply.lookup_tract_npi", return_value=None)
     @patch("app.routers.supply.fetch_npi_providers", new_callable=AsyncMock)
     @patch("app.routers.supply.fetch_hpsa_data", new_callable=AsyncMock)
     @patch("app.routers.supply.fetch_acs_data", new_callable=AsyncMock)
     @patch("app.routers.supply.resolve_location", new_callable=AsyncMock)
     def test_supply_no_data_graceful(
-        self, mock_geo, mock_acs, mock_hpsa, mock_npi, client
+        self, mock_geo, mock_acs, mock_hpsa, mock_npi, mock_tract_npi, client
     ):
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = None
@@ -434,11 +480,12 @@ class TestEmployerEndpoint:
 
 
 class TestCompetitionEndpoint:
+    @patch("app.routers.competition.lookup_tract_npi", return_value=None)
     @patch("app.routers.competition.fetch_npi_providers", new_callable=AsyncMock)
     @patch("app.routers.competition.fetch_acs_data", new_callable=AsyncMock)
     @patch("app.routers.competition.resolve_location", new_callable=AsyncMock)
     def test_competition_detail(
-        self, mock_geo, mock_acs, mock_npi, client
+        self, mock_geo, mock_acs, mock_npi, mock_tract_npi, client
     ):
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = _mock_acs_data()
@@ -454,11 +501,12 @@ class TestCompetitionEndpoint:
         assert data["competition_score"] is not None
         assert data["competition_score"]["data_completeness"] > 0
 
+    @patch("app.routers.competition.lookup_tract_npi", return_value=None)
     @patch("app.routers.competition.fetch_npi_providers", new_callable=AsyncMock)
     @patch("app.routers.competition.fetch_acs_data", new_callable=AsyncMock)
     @patch("app.routers.competition.resolve_location", new_callable=AsyncMock)
     def test_competition_no_data_graceful(
-        self, mock_geo, mock_acs, mock_npi, client
+        self, mock_geo, mock_acs, mock_npi, mock_tract_npi, client
     ):
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = None
@@ -478,6 +526,7 @@ class TestCompetitionEndpoint:
 class TestNPICityPostalPassthrough:
     """Verify routers pass geocoded city/postal to fetch_npi_providers."""
 
+    @patch(f"{_MF_PREFIX}.lookup_tract_npi", return_value=None)
     @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
@@ -485,11 +534,11 @@ class TestNPICityPostalPassthrough:
     @patch(f"{_MF_PREFIX}.fetch_places_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.fetch_acs_data", new_callable=AsyncMock)
     @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
-    def test_npi_receives_postal_from_geocoded_location(
+    def test_npi_receives_city_from_geocoded_location(
         self, mock_geo, mock_acs, mock_places, mock_svi,
-        mock_npi, mock_hpsa, mock_cbp, client
+        mock_npi, mock_hpsa, mock_cbp, mock_tract_npi, client
     ):
-        """When no zip_code param, NPI should get postal_code from geocoder."""
+        """When no zip_code param and city is available, NPI should get city."""
         mock_geo.return_value = _mock_geocode_result()
         mock_acs.return_value = _mock_acs_data()
         mock_places.return_value = _mock_places_data()
@@ -501,7 +550,8 @@ class TestNPICityPostalPassthrough:
         resp = client.get("/api/v1/market-fit?tract_fips=29095001100")
         assert resp.status_code == 200
 
-        # NPI should have been called with postal_code from geocoded location
+        # NPI should prefer city over postal_code for broader geographic scope
         mock_npi.assert_called_once()
         call_kwargs = mock_npi.call_args[1]
-        assert call_kwargs["postal_code"] == "64106"
+        assert call_kwargs["city"] == "KANSAS CITY"
+        assert call_kwargs["postal_code"] is None

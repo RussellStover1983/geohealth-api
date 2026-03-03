@@ -74,11 +74,13 @@ class NPIData:
         pcp_details: list[dict] | None = None,
         facility_counts: dict[str, int] | None = None,
         total_population: int | None = None,
+        is_tract_level: bool = False,
     ):
         self.pcp_count = pcp_count
         self.pcp_details = pcp_details or []
         self.facility_counts = facility_counts or {}
         self.total_population = total_population
+        self.is_tract_level = is_tract_level
 
     @property
     def pcp_per_100k(self) -> float | None:
@@ -168,7 +170,7 @@ async def fetch_npi_providers(
                     "enumeration_type": "NPI-2",
                     "taxonomy_description": fac_desc,
                     "state": state,
-                    "limit": "10",
+                    "limit": "50",
                 }
                 if postal_code:
                     params["postal_code"] = postal_code[:5]

@@ -13,10 +13,11 @@ from app.models.response import (
     ResolvedLocation,
     SupplyDetailResponse,
 )
-from app.services.census_acs import fetch_acs_data
+from app.services.census_acs import fetch_acs_data, fetch_county_population
 from app.services.geocoder import resolve_location
 from app.services.hrsa_hpsa import fetch_hpsa_data
 from app.services.npi_registry import fetch_npi_providers
+from app.services.npi_tract_lookup import lookup_tract_npi
 from app.services.scoring import score_supply_gap
 from app.config import settings
 
@@ -92,23 +93,46 @@ async def get_supply_detail(
     hpsa = None
 
     if state_code and location.state_fips and location.county_fips:
-        effective_postal = zip_code or location.postal_code
-        effective_city = location.city if not effective_postal else None
-        npi = await fetch_npi_providers(
-            state=state_code,
-            city=effective_city,
-            postal_code=effective_postal,
-            tier=provider_tier.value,
-        )
-        if npi and population:
-            npi.total_population = population
-
         hpsa = await fetch_hpsa_data(
             state_fips=location.state_fips,
             county_fips=location.county_fips,
         )
 
-    supply_score = score_supply_gap(npi, hpsa, population)
+        # Try tract-level CSV data first (from NPPES bulk ETL)
+        npi = lookup_tract_npi(location.geoid)
+
+        if npi:
+            # Tract-level data — use ACS tract population for density
+            if population:
+                npi.total_population = population
+        else:
+            # Fall back to NPI Registry API (city-level approximation)
+            if zip_code:
+                effective_postal = zip_code
+                effective_city = None
+            elif location.city:
+                effective_postal = None
+                effective_city = location.city
+            else:
+                effective_postal = location.postal_code
+                effective_city = None
+            npi = await fetch_npi_providers(
+                state=state_code,
+                city=effective_city,
+                postal_code=effective_postal,
+                tier=provider_tier.value,
+            )
+            if npi and effective_city:
+                county_pop = await fetch_county_population(
+                    location.state_fips, location.county_fips
+                )
+                if county_pop:
+                    npi.total_population = county_pop
+            elif npi and population:
+                npi.total_population = population
+
+    npi_pop = npi.total_population if npi else population
+    supply_score = score_supply_gap(npi, hpsa, npi_pop)
 
     return SupplyDetailResponse(
         location=ResolvedLocation(

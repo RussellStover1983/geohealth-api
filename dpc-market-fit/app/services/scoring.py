@@ -35,26 +35,26 @@ DEFAULT_WEIGHTS = {
 # In production, these would be computed from actual distributions.
 _NATIONAL_REFS = {
     # Demand dimension
-    "uninsured_rate": (2.0, 40.0),           # % uninsured
-    "chronic_disease_burden": (5.0, 35.0),    # avg prevalence %
-    "working_age_pop": (500, 10000),          # count
-    "svi_socioeconomic": (0.0, 1.0),         # percentile 0-1
+    "uninsured_rate": (4.0, 25.0),           # % uninsured — 95th %ile ~25%
+    "chronic_disease_burden": (8.0, 25.0),    # avg prevalence % — most tracts 10-22%
+    "working_age_pop": (800, 5000),          # count — typical tract range
+    "svi_socioeconomic": (0.0, 1.0),         # percentile 0-1 (unchanged)
     # Affordability dimension
-    "median_income": (15000, 150000),         # dollars
-    "dpc_pct_income": (0.5, 10.0),           # %
-    "employment_rate": (60.0, 99.0),         # %
-    "housing_burden": (10.0, 70.0),          # %
+    "median_income": (25000, 120000),         # dollars — tighter range
+    "dpc_pct_income": (1.0, 6.0),            # % — typical DPC range
+    "employment_rate": (85.0, 98.0),         # % — most tracts 88-97%
+    "housing_burden": (15.0, 55.0),          # % — tighter range
     # Supply gap dimension
-    "pcp_per_100k": (20.0, 150.0),           # PCPs per 100k population
-    "hpsa_score": (0.0, 25.0),              # HPSA score 0-25
-    "fqhc_presence": (0, 5),                 # FQHC count in area
+    "pcp_per_100k": (30.0, 120.0),           # PCPs per 100k — realistic density
+    "hpsa_score": (0.0, 25.0),              # HPSA score 0-25 (unchanged)
+    "fqhc_presence": (0, 3),                 # FQHC count — most areas 0-2
     # Employer dimension
-    "target_estab_pct": (5.0, 50.0),         # % establishments 10-249 employees
-    "avg_annual_wage": (25000, 100000),       # average annual wage
-    "total_establishments": (100, 10000),     # total establishments in county
+    "target_estab_pct": (8.0, 35.0),         # % establishments 10-249 employees
+    "avg_annual_wage": (30000, 80000),        # average annual wage — middle 90%
+    "total_establishments": (200, 5000),      # total establishments — typical counties
     # Competition dimension
-    "competing_facilities": (0, 20),          # total competing facility count
-    "pcp_density": (20.0, 150.0),            # PCP density per 100k
+    "competing_facilities": (0, 10),          # total competing facility count
+    "pcp_density": (30.0, 120.0),            # PCP density per 100k — matches supply gap
 }
 
 
@@ -229,8 +229,8 @@ def score_supply_gap(
         indicators.append((score, 0.35))
         completeness_parts += 1
     elif hpsa and not hpsa.is_hpsa:
-        # Not a shortage area — low supply gap score for this indicator
-        indicators.append((20.0, 0.35))
+        # Not a shortage area — moderate-low supply gap score
+        indicators.append((30.0, 0.35))
         completeness_parts += 1
 
     # FQHC presence (weight: 0.25) — INVERTED: more FQHCs = less gap

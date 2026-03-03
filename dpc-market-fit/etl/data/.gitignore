@@ -1,0 +1,4 @@
+# Large downloaded files — not committed to repo
+*.zip
+*.xlsx
+*.txt

@@ -13,9 +13,10 @@ from app.models.response import (
     ErrorResponse,
     ResolvedLocation,
 )
-from app.services.census_acs import fetch_acs_data
+from app.services.census_acs import fetch_acs_data, fetch_county_population
 from app.services.geocoder import resolve_location
 from app.services.npi_registry import fetch_npi_providers
+from app.services.npi_tract_lookup import lookup_tract_npi
 from app.services.scoring import score_competition
 from app.config import settings
 
@@ -87,18 +88,41 @@ async def get_competition_detail(
     npi = None
 
     if state_code:
-        effective_postal = zip_code or location.postal_code
-        effective_city = location.city if not effective_postal else None
-        npi = await fetch_npi_providers(
-            state=state_code,
-            city=effective_city,
-            postal_code=effective_postal,
-            tier=provider_tier.value,
-        )
-        if npi and population:
-            npi.total_population = population
+        # Try tract-level CSV data first (from NPPES bulk ETL)
+        npi = lookup_tract_npi(location.geoid)
 
-    comp_score = score_competition(npi, population)
+        if npi:
+            # Tract-level data — use ACS tract population for density
+            if population:
+                npi.total_population = population
+        else:
+            # Fall back to NPI Registry API (city-level approximation)
+            if zip_code:
+                effective_postal = zip_code
+                effective_city = None
+            elif location.city:
+                effective_postal = None
+                effective_city = location.city
+            else:
+                effective_postal = location.postal_code
+                effective_city = None
+            npi = await fetch_npi_providers(
+                state=state_code,
+                city=effective_city,
+                postal_code=effective_postal,
+                tier=provider_tier.value,
+            )
+            if npi and effective_city and location.state_fips and location.county_fips:
+                county_pop = await fetch_county_population(
+                    location.state_fips, location.county_fips
+                )
+                if county_pop:
+                    npi.total_population = county_pop
+            elif npi and population:
+                npi.total_population = population
+
+    npi_pop = npi.total_population if npi else population
+    comp_score = score_competition(npi, npi_pop)
 
     return CompetitionDetailResponse(
         location=ResolvedLocation(

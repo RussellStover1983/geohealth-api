@@ -97,7 +97,11 @@ async def resolve_location(
 ) -> GeocodedLocation:
     """Unified location resolver — accepts any input type."""
     if tract_fips:
-        # Bypass geocoding — construct from FIPS directly
+        # Try to enrich with centroid coordinates and city/ZIP
+        enriched = await _enrich_tract_location(tract_fips)
+        if enriched:
+            return enriched
+        # Fallback: stub with FIPS only
         return GeocodedLocation(
             lat=0.0,
             lon=0.0,
@@ -249,6 +253,128 @@ async def _reverse_geocode_fcc(lat: float, lon: float) -> GeocodedLocation:
         tract_fips=tract,
         geoid=geoid,
     )
+
+
+async def _enrich_tract_location(geoid: str) -> GeocodedLocation | None:
+    """Enrich a tract FIPS with centroid coordinates and city/ZIP.
+
+    Uses Census TIGERweb to get the tract centroid, then Census reverse
+    geocoder to resolve city and postal code. Falls back to None if
+    enrichment fails (caller should use the basic stub).
+    """
+    try:
+        # Step 1: Get tract centroid from TIGERweb
+        tiger_url = (
+            "https://tigerweb.geo.census.gov/arcgis/rest/services/"
+            "TIGERweb/tigerWMS_Census2020/MapServer/6/query"
+        )
+        tiger_params = {
+            "where": f"GEOID='{geoid}'",
+            "outFields": "CENTLAT,CENTLON",
+            "f": "json",
+        }
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(tiger_url, params=tiger_params)
+            resp.raise_for_status()
+
+        data = resp.json()
+        features = data.get("features", [])
+        if not features:
+            logger.debug("TIGERweb returned no features for %s", geoid)
+            return None
+
+        attrs = features[0].get("attributes", {})
+        lat_str = attrs.get("CENTLAT")
+        lon_str = attrs.get("CENTLON")
+        if lat_str is None or lon_str is None:
+            return None
+
+        lat = float(lat_str)
+        lon = float(lon_str)
+        if lat == 0.0 and lon == 0.0:
+            return None
+
+        # Step 2: Reverse geocode centroid for city/ZIP via Census
+        city = None
+        postal_code = None
+        try:
+            geo_url = "https://geocoding.geo.census.gov/geocoder/geographies/coordinates"
+            geo_params = {
+                "x": str(lon),
+                "y": str(lat),
+                "benchmark": "Public_AR_Current",
+                "vintage": "Current_Current",
+                "format": "json",
+            }
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp2 = await client.get(geo_url, params=geo_params)
+                resp2.raise_for_status()
+
+            geo_data = resp2.json()
+            geographies = geo_data.get("result", {}).get("geographies", {})
+
+            # Extract city — prefer Incorporated Places over County Subdivisions
+            county_subs = geographies.get("County Subdivisions", [])
+            if county_subs:
+                city = county_subs[0].get("NAME")
+            inc_places = geographies.get("Incorporated Places", [])
+            if inc_places:
+                city = inc_places[0].get("NAME")
+
+            # Census appends entity type (e.g., "Kansas City city",
+            # "Springfield township") — strip trailing type suffix
+            if city:
+                for suffix in (" city", " town", " village", " CDP", " township"):
+                    if city.endswith(suffix):
+                        city = city[: -len(suffix)]
+                        break
+        except Exception:
+            logger.debug("Census reverse geocode failed for (%s, %s)", lat, lon)
+
+        # Step 3: Try ZIP via TIGERweb ZCTA layer
+        if postal_code is None:
+            try:
+                zcta_url = (
+                    "https://tigerweb.geo.census.gov/arcgis/rest/services/"
+                    "TIGERweb/tigerWMS_Census2020/MapServer/84/query"
+                )
+                zcta_params = {
+                    "geometry": f'{{"x":{lon},"y":{lat}}}',
+                    "geometryType": "esriGeometryPoint",
+                    "inSR": "4326",
+                    "spatialRel": "esriSpatialRelIntersects",
+                    "outFields": "ZCTA5",
+                    "returnGeometry": "false",
+                    "f": "json",
+                }
+                async with httpx.AsyncClient(timeout=10) as client:
+                    resp3 = await client.get(zcta_url, params=zcta_params)
+                    resp3.raise_for_status()
+
+                zcta_data = resp3.json()
+                zcta_features = zcta_data.get("features", [])
+                if zcta_features:
+                    postal_code = zcta_features[0].get("attributes", {}).get(
+                        "ZCTA5"
+                    )
+            except Exception:
+                logger.debug("ZCTA lookup failed for (%s, %s)", lat, lon)
+
+        return GeocodedLocation(
+            lat=lat,
+            lon=lon,
+            matched_address=f"Tract {geoid}",
+            state_fips=geoid[:2],
+            county_fips=geoid[2:5],
+            tract_fips=geoid[5:],
+            geoid=geoid,
+            city=city,
+            postal_code=postal_code,
+        )
+
+    except Exception:
+        logger.debug("Tract enrichment failed for %s, using stub", geoid)
+        return None
 
 
 def _empty_location(description: str) -> GeocodedLocation:
