@@ -458,6 +458,24 @@ class TestCompetitionScoring:
         assert result.data_completeness > 0
         assert result.data_completeness < 1.0
 
+    def test_score_capped_at_70_on_low_completeness(self):
+        """Competition score should cap at 70 when data is incomplete."""
+        # Zero facilities but no population → completeness < 1.0
+        npi = _make_npi(
+            pcp_count=0,
+            total_population=None,
+            facility_counts={
+                "261QF0400X": 0,
+                "261QU0200X": 0,
+                "261QR1300X": 0,
+            },
+        )
+        result = score_competition(npi, None)
+        # Without population, only facility indicator is scored → completeness 0.5
+        assert result.data_completeness < 1.0
+        # Score would be 100 (zero competition) but should be capped at 70
+        assert result.score <= 70.0
+
 
 # ---------------------------------------------------------------------------
 # Composite scoring

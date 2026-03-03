@@ -92,9 +92,12 @@ async def get_supply_detail(
     hpsa = None
 
     if state_code and location.state_fips and location.county_fips:
+        effective_postal = zip_code or location.postal_code
+        effective_city = location.city if not effective_postal else None
         npi = await fetch_npi_providers(
             state=state_code,
-            postal_code=zip_code,
+            city=effective_city,
+            postal_code=effective_postal,
             tier=provider_tier.value,
         )
         if npi and population:

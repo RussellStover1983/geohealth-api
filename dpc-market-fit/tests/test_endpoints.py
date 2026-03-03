@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from app.services.census_acs import ACSData
 from app.services.census_cbp import CBPData
 from app.services.cdc_places import PLACESData
@@ -19,11 +17,13 @@ def _mock_geocode_result():
     return GeocodedLocation(
         lat=39.0997,
         lon=-94.5786,
-        matched_address="123 Main St, Kansas City, MO",
+        matched_address="123 MAIN ST, KANSAS CITY, MO, 64106",
         state_fips="29",
         county_fips="095",
         tract_fips="001100",
         geoid="29095001100",
+        city="KANSAS CITY",
+        postal_code="64106",
     )
 
 
@@ -473,3 +473,35 @@ class TestCompetitionEndpoint:
     def test_competition_no_location(self, client):
         resp = client.get("/api/v1/market-fit/competition")
         assert resp.status_code == 400
+
+
+class TestNPICityPostalPassthrough:
+    """Verify routers pass geocoded city/postal to fetch_npi_providers."""
+
+    @patch(f"{_MF_PREFIX}.fetch_cbp_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_hpsa_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_npi_providers", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_svi_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_places_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.fetch_acs_data", new_callable=AsyncMock)
+    @patch(f"{_MF_PREFIX}.resolve_location", new_callable=AsyncMock)
+    def test_npi_receives_postal_from_geocoded_location(
+        self, mock_geo, mock_acs, mock_places, mock_svi,
+        mock_npi, mock_hpsa, mock_cbp, client
+    ):
+        """When no zip_code param, NPI should get postal_code from geocoder."""
+        mock_geo.return_value = _mock_geocode_result()
+        mock_acs.return_value = _mock_acs_data()
+        mock_places.return_value = _mock_places_data()
+        mock_svi.return_value = _mock_svi_data()
+        mock_npi.return_value = _mock_npi_data()
+        mock_hpsa.return_value = _mock_hpsa_data()
+        mock_cbp.return_value = _mock_cbp_data()
+
+        resp = client.get("/api/v1/market-fit?tract_fips=29095001100")
+        assert resp.status_code == 200
+
+        # NPI should have been called with postal_code from geocoded location
+        mock_npi.assert_called_once()
+        call_kwargs = mock_npi.call_args[1]
+        assert call_kwargs["postal_code"] == "64106"

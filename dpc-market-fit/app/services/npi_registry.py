@@ -12,7 +12,6 @@ from pathlib import Path
 
 import httpx
 
-from app.config import settings
 from app.utils.cache import npi_cache
 
 logger = logging.getLogger(__name__)
@@ -33,26 +32,36 @@ def _load_taxonomy_config() -> dict:
 
 def get_taxonomy_codes(tier: str = "tier1") -> list[str]:
     """Return flat list of taxonomy codes for the given tier."""
+    return [code for code, _desc in get_taxonomy_entries(tier)]
+
+
+def get_taxonomy_entries(tier: str = "tier1") -> list[tuple[str, str]]:
+    """Return list of (code, description) tuples for the given tier."""
     config = _load_taxonomy_config()
-    codes: list[str] = []
+    entries: list[tuple[str, str]] = []
 
     if tier in ("tier1", "tier1_tier2", "all"):
         tier1 = config["tiers"]["tier1"]["codes"]
         for group in tier1.values():
-            codes.extend(item["code"] for item in group)
+            entries.extend((item["code"], item["description"]) for item in group)
 
     if tier in ("tier1_tier2", "all"):
         tier2 = config["tiers"]["tier2"]["codes"]
         for group in tier2.values():
-            codes.extend(item["code"] for item in group)
+            entries.extend((item["code"], item["description"]) for item in group)
 
-    return codes
+    return entries
 
 
 def get_facility_codes() -> list[str]:
     """Return facility-level NPI taxonomy codes (FQHCs, urgent care, etc.)."""
+    return [code for code, _desc in get_facility_entries()]
+
+
+def get_facility_entries() -> list[tuple[str, str]]:
+    """Return (code, description) tuples for facility-level NPI codes."""
     config = _load_taxonomy_config()
-    return [item["code"] for item in config["facility_codes"]["codes"]]
+    return [(item["code"], item["description"]) for item in config["facility_codes"]["codes"]]
 
 
 class NPIData:
@@ -108,20 +117,20 @@ async def fetch_npi_providers(
     if cached is not None:
         return cached
 
-    taxonomy_codes = get_taxonomy_codes(tier)
+    taxonomy_entries = get_taxonomy_entries(tier)
     pcp_count = 0
     pcp_details: list[dict] = []
 
-    # NPPES API supports one taxonomy_description per call, so we query by
-    # enumeration_type and filter results. We batch by searching the state/area.
+    # NPPES API taxonomy_description expects description text, not codes.
+    # We query one description per call and aggregate results.
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             # Search for individual providers (NPI-1)
-            for taxonomy_code in taxonomy_codes[:16]:  # Limit API calls
+            for tax_code, tax_desc in taxonomy_entries[:16]:  # Limit API calls
                 params: dict[str, str] = {
                     "version": "2.1",
                     "enumeration_type": "NPI-1",
-                    "taxonomy_description": taxonomy_code,
+                    "taxonomy_description": tax_desc,
                     "state": state,
                     "limit": "200",
                 }
@@ -145,19 +154,19 @@ async def fetch_npi_providers(
                         "npi": result.get("number"),
                         "name": f"{basic.get('first_name', '')} {basic.get('last_name', '')}".strip(),
                         "credential": basic.get("credential", ""),
-                        "taxonomy": taxonomy_code,
+                        "taxonomy": tax_code,
                     })
 
         # Search for facilities
         facility_counts: dict[str, int] = {}
-        facility_codes = get_facility_codes()
+        facility_entries = get_facility_entries()
 
         async with httpx.AsyncClient(timeout=20) as client:
-            for fac_code in facility_codes:
+            for fac_code, fac_desc in facility_entries:
                 params = {
                     "version": "2.1",
                     "enumeration_type": "NPI-2",
-                    "taxonomy_description": fac_code,
+                    "taxonomy_description": fac_desc,
                     "state": state,
                     "limit": "10",
                 }

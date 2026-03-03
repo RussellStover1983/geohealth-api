@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 export function LayerPanel() {
   const { activeLayer, setActiveLayer } = useGeoHealthStore();
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
+    "DPC Market Fit": true,
     Composite: true,
     Demographics: true,
     "Social Vulnerability (SVI)": false,

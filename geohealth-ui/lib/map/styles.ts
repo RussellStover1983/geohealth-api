@@ -27,6 +27,20 @@ export const METRIC_CATEGORIES: {
   metrics: MetricConfig[];
 }[] = [
   {
+    name: "DPC Market Fit",
+    description: "Direct Primary Care viability estimate",
+    metrics: [
+      {
+        key: "dpc_market_fit",
+        label: "DPC Market Fit",
+        unit: "score",
+        range: [30, 75],
+        highIsBad: false,
+        decimals: 0,
+      },
+    ],
+  },
+  {
     name: "Composite",
     description: "Overall vulnerability scores",
     metrics: [

@@ -363,6 +363,10 @@ def score_competition(
     final = clamp_score(weighted_average(indicators))
     completeness = completeness_parts / completeness_total
 
+    # Cap at 70 when data is incomplete to prevent false "EXCELLENT" ratings
+    if completeness < 1.0 and final > 70.0:
+        final = 70.0
+
     summary = _competition_summary(npi, final)
 
     return DimensionScore(

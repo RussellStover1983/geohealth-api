@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { TractDataModel } from "./api/types";
+import { computeDpcEstimate } from "./map/dpc-score";
 
 export interface ViewportState {
   latitude: number;
@@ -85,11 +86,20 @@ export const useGeoHealthStore = create<GeoHealthStore>((set) => ({
       const newLoadedStates = new Set(state.loadedStates);
       newLoadedStates.add(stateFips);
       const existingFeatures = state.tractsGeoJSON?.features ?? [];
+      // Inject DPC Market Fit estimate into each feature's properties
+      const enrichedFeatures = geojson.features.map((f) => {
+        const props = (f.properties ?? {}) as Record<string, unknown>;
+        const dpcScore = computeDpcEstimate(props);
+        return {
+          ...f,
+          properties: { ...props, dpc_market_fit: dpcScore },
+        };
+      });
       return {
         loadedStates: newLoadedStates,
         tractsGeoJSON: {
           type: "FeatureCollection",
-          features: [...existingFeatures, ...geojson.features],
+          features: [...existingFeatures, ...enrichedFeatures],
         },
       };
     }),

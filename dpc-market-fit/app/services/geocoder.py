@@ -32,6 +32,8 @@ class GeocodedLocation(BaseModel):
     county_fips: str | None = None
     tract_fips: str | None = None  # 6-digit tract code
     geoid: str | None = None  # Full 11-digit FIPS (state+county+tract)
+    city: str | None = None
+    postal_code: str | None = None
 
 
 async def geocode_address(address: str) -> GeocodedLocation:
@@ -164,6 +166,15 @@ async def _geocode_census(query: str) -> GeocodedLocation:
     tract = tract_info.get("TRACT", "")
     geoid = f"{state}{county}{tract}" if state and county and tract else None
 
+    # Extract city and postal code from matched address
+    # Census format: "STREET, CITY, STATE, ZIP"
+    city_parsed = None
+    postal_parsed = None
+    addr_parts = match["matchedAddress"].split(",")
+    if len(addr_parts) >= 4:
+        city_parsed = addr_parts[1].strip() or None
+        postal_parsed = addr_parts[-1].strip() or None
+
     return GeocodedLocation(
         lat=coords["y"],
         lon=coords["x"],
@@ -172,6 +183,8 @@ async def _geocode_census(query: str) -> GeocodedLocation:
         county_fips=county or None,
         tract_fips=tract or None,
         geoid=geoid,
+        city=city_parsed,
+        postal_code=postal_parsed,
     )
 
 
