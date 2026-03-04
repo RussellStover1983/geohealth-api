@@ -108,6 +108,7 @@ export function MapContainer() {
 
   const [cursor, setCursor] = useState<string>("grab");
   const [isLoadingTracts, setIsLoadingTracts] = useState(false);
+  const [isLoadingProviders, setIsLoadingProviders] = useState(false);
 
   // Fly to target when it changes
   useEffect(() => {
@@ -197,16 +198,21 @@ export function MapContainer() {
       if (!bounds) return;
       const sw = bounds.getSouthWest();
       const ne = bounds.getNorthEast();
+      setIsLoadingProviders(true);
       api
         .providersGeoJSON({
           bbox: [sw.lng, sw.lat, ne.lng, ne.lat],
           provider_type: providerFilter,
           limit: 2000,
         })
-        .then((geojson) => setProvidersGeoJSON(geojson))
-        .catch(() => {
-          // Silently fail
-        });
+        .then((geojson) => {
+          console.log(`[Providers] Loaded ${geojson.features?.length ?? 0} features`);
+          setProvidersGeoJSON(geojson);
+        })
+        .catch((err) => {
+          console.error("[Providers] Failed to load:", err);
+        })
+        .finally(() => setIsLoadingProviders(false));
     }, 300);
     return () => {
       if (providerDebounceRef.current) clearTimeout(providerDebounceRef.current);
@@ -361,8 +367,8 @@ export function MapContainer() {
         attributionControl={true}
         reuseMaps
       >
-        <NavigationControl position="top-right" showCompass={false} />
-        <GeolocateControl position="top-right" />
+        <NavigationControl position="top-left" showCompass={false} />
+        <GeolocateControl position="top-left" />
 
         {/* Tract polygon fill layer */}
         {tractsGeoJSON && (
@@ -511,7 +517,7 @@ export function MapContainer() {
       )}
 
       {/* Provider zoom hint — show when providers toggled on but zoom too low */}
-      {showProviders && viewport.zoom < 9 && (
+      {showProviders && viewport.zoom < 9 && !isLoadingTracts && (
         <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2">
           <div className="flex items-center gap-2 rounded-full bg-blue-50/95 px-4 py-2 text-xs font-medium text-blue-700 shadow-md backdrop-blur-sm">
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -522,8 +528,27 @@ export function MapContainer() {
         </div>
       )}
 
+      {/* Provider loading indicator */}
+      {showProviders && isLoadingProviders && viewport.zoom >= 9 && (
+        <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2">
+          <div className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-medium text-blue-600 shadow-md backdrop-blur-sm">
+            <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-200 border-t-blue-500" />
+            Loading providers...
+          </div>
+        </div>
+      )}
+
+      {/* Provider count badge */}
+      {showProviders && providersGeoJSON && !isLoadingProviders && viewport.zoom >= 9 && (
+        <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2">
+          <div className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-stone-600 shadow-md backdrop-blur-sm">
+            {providersGeoJSON.features.length.toLocaleString()} providers in view
+          </div>
+        </div>
+      )}
+
       {/* Zoom level indicator */}
-      <div className="absolute bottom-8 right-4 z-10">
+      <div className="absolute top-[120px] left-2.5 z-10">
         <div className="rounded bg-white/80 px-2 py-1 text-[10px] font-medium text-stone-500 shadow-sm backdrop-blur-sm">
           Zoom: {Math.round(viewport.zoom)}
         </div>
