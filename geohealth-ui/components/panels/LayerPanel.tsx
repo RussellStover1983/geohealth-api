@@ -74,7 +74,7 @@ export function LayerPanel() {
           )}
           {showProviders && (
             <p className="mt-1.5 ml-6 text-[10px] text-stone-400">
-              Zoom to level 9+ to see provider pins
+              Zoom into a city/metro area to see pins. Use +/- or scroll to zoom.
             </p>
           )}
         </div>

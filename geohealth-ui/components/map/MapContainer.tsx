@@ -361,8 +361,8 @@ export function MapContainer() {
         attributionControl={true}
         reuseMaps
       >
-        <NavigationControl position="bottom-right" showCompass={false} />
-        <GeolocateControl position="bottom-right" />
+        <NavigationControl position="top-right" showCompass={false} />
+        <GeolocateControl position="top-right" />
 
         {/* Tract polygon fill layer */}
         {tractsGeoJSON && (
@@ -509,6 +509,25 @@ export function MapContainer() {
           </div>
         </div>
       )}
+
+      {/* Provider zoom hint — show when providers toggled on but zoom too low */}
+      {showProviders && viewport.zoom < 9 && (
+        <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2">
+          <div className="flex items-center gap-2 rounded-full bg-blue-50/95 px-4 py-2 text-xs font-medium text-blue-700 shadow-md backdrop-blur-sm">
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
+            </svg>
+            Zoom in closer to see provider pins (use +/- buttons or scroll)
+          </div>
+        </div>
+      )}
+
+      {/* Zoom level indicator */}
+      <div className="absolute bottom-8 right-4 z-10">
+        <div className="rounded bg-white/80 px-2 py-1 text-[10px] font-medium text-stone-500 shadow-sm backdrop-blur-sm">
+          Zoom: {Math.round(viewport.zoom)}
+        </div>
+      </div>
 
       {/* Legend overlay */}
       {metricConfig && (
