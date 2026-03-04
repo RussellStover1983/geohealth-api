@@ -29,6 +29,7 @@ const ALLOWED_PREFIXES = [
   "/v1/stats",
   "/v1/dictionary",
   "/v1/tracts",
+  "/v1/providers",
   "/llms.txt",
   "/llms-full.txt",
 ];
