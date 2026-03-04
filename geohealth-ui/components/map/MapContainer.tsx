@@ -476,8 +476,13 @@ export function MapContainer() {
               type="symbol"
               filter={["has", "point_count"]}
               layout={{
-                "text-field": ["get", "point_count_abbreviated"],
+                "text-field": ["to-string", ["get", "point_count"]],
+                "text-font": ["Noto Sans Regular"],
                 "text-size": 12,
+                "text-allow-overlap": true,
+              }}
+              paint={{
+                "text-color": "#333",
               }}
             />
             {/* Individual provider points */}
