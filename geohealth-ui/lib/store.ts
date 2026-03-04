@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { TractDataModel } from "./api/types";
+import type { TractDataModel, NpiProvider } from "./api/types";
 import { computeDpcEstimate } from "./map/dpc-score";
 
 export interface ViewportState {
@@ -44,6 +44,16 @@ interface GeoHealthStore {
   closeDetailPanel: () => void;
   toggleSidebar: () => void;
   setComparisonOpen: (open: boolean) => void;
+
+  // Provider layer
+  showProviders: boolean;
+  setShowProviders: (show: boolean) => void;
+  providerFilter: string;
+  setProviderFilter: (filter: string) => void;
+  providersGeoJSON: GeoJSON.FeatureCollection | null;
+  setProvidersGeoJSON: (geojson: GeoJSON.FeatureCollection | null) => void;
+  selectedProvider: NpiProvider | null;
+  setSelectedProvider: (provider: NpiProvider | null) => void;
 
   // Search
   searchQuery: string;
@@ -115,6 +125,15 @@ export const useGeoHealthStore = create<GeoHealthStore>((set) => ({
   closeDetailPanel: () => set({ isDetailPanelOpen: false }),
   toggleSidebar: () => set((s) => ({ isSidebarCollapsed: !s.isSidebarCollapsed })),
   setComparisonOpen: (open) => set({ isComparisonOpen: open }),
+
+  showProviders: false,
+  setShowProviders: (show) => set({ showProviders: show }),
+  providerFilter: "all",
+  setProviderFilter: (filter) => set({ providerFilter: filter }),
+  providersGeoJSON: null,
+  setProvidersGeoJSON: (geojson) => set({ providersGeoJSON: geojson }),
+  selectedProvider: null,
+  setSelectedProvider: (provider) => set({ selectedProvider: provider }),
 
   searchQuery: "",
   isSearching: false,

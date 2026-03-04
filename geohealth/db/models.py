@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from geoalchemy2 import Geometry
 from sqlalchemy import Boolean, Column, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -64,3 +66,43 @@ class WebhookSubscription(Base):
 
     def __repr__(self) -> str:
         return f"<WebhookSubscription id={self.id} url={self.url}>"
+
+
+class NpiProvider(Base):
+    __tablename__ = "npi_providers"
+    __table_args__ = (
+        Index("ix_npi_providers_geom", "geom", postgresql_using="gist"),
+        Index("ix_npi_providers_state", "practice_state"),
+        Index("ix_npi_providers_type", "provider_type"),
+        Index("ix_npi_providers_tract", "tract_fips"),
+    )
+
+    npi = Column(String(10), primary_key=True, comment="National Provider Identifier")
+    entity_type = Column(
+        String(1), nullable=False, comment="1=individual, 2=organization"
+    )
+    provider_name = Column(Text, nullable=False)
+    credential = Column(String(50), nullable=True)
+    gender = Column(String(1), nullable=True)
+    primary_taxonomy = Column(
+        String(15), nullable=False, comment="Primary taxonomy code"
+    )
+    taxonomy_description = Column(Text, nullable=True)
+    provider_type = Column(
+        String(30),
+        nullable=False,
+        comment="pcp|fqhc|urgent_care|rural_health_clinic|primary_care_clinic|community_health_center",
+    )
+    practice_address = Column(Text, nullable=True)
+    practice_city = Column(String(100), nullable=True)
+    practice_state = Column(String(2), nullable=False)
+    practice_zip = Column(String(5), nullable=True)
+    phone = Column(String(20), nullable=True)
+    is_fqhc = Column(Boolean, nullable=False, default=False)
+    tract_fips = Column(
+        String(11), nullable=True, comment="Census tract FIPS from geocoder"
+    )
+    geom = Column(Geometry("POINT", srid=4326), nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<NpiProvider npi={self.npi} name={self.provider_name}>"

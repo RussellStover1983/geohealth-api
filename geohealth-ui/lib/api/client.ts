@@ -9,6 +9,7 @@ import type {
   MarketFitResponse,
   DemandDetailResponse,
   SupplyDetailResponse,
+  ProvidersResponse,
 } from "./types";
 
 /**
@@ -222,6 +223,44 @@ export const api = {
     if (params.tract_fips) searchParams.tract_fips = params.tract_fips;
     if (params.address) searchParams.address = params.address;
     return dpcFetch<SupplyDetailResponse>("/api/v1/market-fit/supply", searchParams);
+  },
+
+  // NPI Provider endpoints
+  providersGeoJSON(params: {
+    bbox: [number, number, number, number];
+    provider_type?: string;
+    limit?: number;
+  }): Promise<GeoJSON.FeatureCollection> {
+    const searchParams: Record<string, string> = {
+      bbox: params.bbox.join(","),
+    };
+    if (params.provider_type && params.provider_type !== "all") {
+      searchParams.provider_type = params.provider_type;
+    }
+    if (params.limit !== undefined) searchParams.limit = params.limit.toString();
+    return apiFetch<GeoJSON.FeatureCollection>("/v1/providers/geojson", searchParams);
+  },
+
+  providers(params: {
+    lat?: number;
+    lng?: number;
+    radius?: number;
+    tract_fips?: string;
+    provider_type?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ProvidersResponse> {
+    const searchParams: Record<string, string> = {};
+    if (params.lat !== undefined) searchParams.lat = params.lat.toString();
+    if (params.lng !== undefined) searchParams.lng = params.lng.toString();
+    if (params.radius !== undefined) searchParams.radius = params.radius.toString();
+    if (params.tract_fips) searchParams.tract_fips = params.tract_fips;
+    if (params.provider_type && params.provider_type !== "all") {
+      searchParams.provider_type = params.provider_type;
+    }
+    if (params.limit !== undefined) searchParams.limit = params.limit.toString();
+    if (params.offset !== undefined) searchParams.offset = params.offset.toString();
+    return apiFetch<ProvidersResponse>("/v1/providers", searchParams);
   },
 };
 

@@ -25,6 +25,7 @@ from geohealth.api.routes.demographics import router as demographics_router
 from geohealth.api.routes.dictionary import router as dictionary_router
 from geohealth.api.routes.geojson import router as geojson_router
 from geohealth.api.routes.nearby import router as nearby_router
+from geohealth.api.routes.providers import router as providers_router
 from geohealth.api.routes.stats import router as stats_router
 from geohealth.api.routes.trends import router as trends_router
 from geohealth.api.routes.webhooks import router as webhooks_router
@@ -137,6 +138,14 @@ _OPENAPI_TAGS = [
             "are exceeded."
         ),
     },
+    {
+        "name": "providers",
+        "description": (
+            "NPI provider data — search individual providers by "
+            "bounding box, radius, or census tract. Returns provider "
+            "details including taxonomy, address, and FQHC status."
+        ),
+    },
 ]
 
 
@@ -195,6 +204,7 @@ app.include_router(trends_router)
 app.include_router(demographics_router)
 app.include_router(webhooks_router)
 app.include_router(geojson_router)
+app.include_router(providers_router)
 
 
 @app.get(

@@ -10,6 +10,7 @@ import Map, {
   type ViewStateChangeEvent,
   type MapLayerMouseEvent,
 } from "react-map-gl/maplibre";
+import type maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useGeoHealthStore } from "@/lib/store";
 import {
@@ -18,7 +19,8 @@ import {
   POSITIVE_COLORS,
 } from "@/lib/map/styles";
 import { ChoroplethLegend } from "./ChoroplethLegend";
-import type { TractDataModel } from "@/lib/api/types";
+import { ProviderPopup } from "./ProviderPopup";
+import type { TractDataModel, NpiProvider } from "@/lib/api/types";
 import { api } from "@/lib/api/client";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
@@ -97,6 +99,11 @@ export function MapContainer() {
     setSelectedTract,
     loadedStates,
     mergeTractsGeoJSON,
+    showProviders,
+    providerFilter,
+    providersGeoJSON,
+    setProvidersGeoJSON,
+    setSelectedProvider,
   } = useGeoHealthStore();
 
   const [cursor, setCursor] = useState<string>("grab");
@@ -170,6 +177,42 @@ export function MapContainer() {
     };
   }, [viewport, loadedStates, mergeTractsGeoJSON]);
 
+  // Auto-load providers when showProviders is on and zoom >= 9
+  const providerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!showProviders) {
+      setProvidersGeoJSON(null);
+      return;
+    }
+    if (providerDebounceRef.current) clearTimeout(providerDebounceRef.current);
+    providerDebounceRef.current = setTimeout(() => {
+      if (!mapRef.current) return;
+      const map = mapRef.current.getMap();
+      if (!map) return;
+      if (viewport.zoom < 9) {
+        setProvidersGeoJSON(null);
+        return;
+      }
+      const bounds = map.getBounds();
+      if (!bounds) return;
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+      api
+        .providersGeoJSON({
+          bbox: [sw.lng, sw.lat, ne.lng, ne.lat],
+          provider_type: providerFilter,
+          limit: 2000,
+        })
+        .then((geojson) => setProvidersGeoJSON(geojson))
+        .catch(() => {
+          // Silently fail
+        });
+    }, 300);
+    return () => {
+      if (providerDebounceRef.current) clearTimeout(providerDebounceRef.current);
+    };
+  }, [viewport, showProviders, providerFilter, setProvidersGeoJSON]);
+
   const onMove = useCallback(
     (evt: ViewStateChangeEvent) => {
       setViewport({
@@ -199,34 +242,77 @@ export function MapContainer() {
 
   const onClick = useCallback(
     (e: MapLayerMouseEvent) => {
-      if (e.features && e.features[0]) {
-        const props = e.features[0].properties;
-        if (!props) return;
+      if (!e.features || !e.features[0]) return;
+      const feature = e.features[0];
+      const props = feature.properties;
+      if (!props) return;
+      const layerId = feature.layer?.id;
 
-        // Build tract data from GeoJSON properties
-        const tractData = {
-          geoid: props.geoid as string,
-          state_fips: props.state_fips as string,
-          county_fips: props.county_fips as string,
-          tract_code: props.tract_code as string,
-          name: (props.name as string) || null,
-          total_population: props.total_population as number | null,
-          median_household_income:
-            props.median_household_income as number | null,
-          poverty_rate: props.poverty_rate as number | null,
-          uninsured_rate: props.uninsured_rate as number | null,
-          unemployment_rate: props.unemployment_rate as number | null,
-          median_age: props.median_age as number | null,
-          sdoh_index: props.sdoh_index as number | null,
-          // Reconstruct nested objects from flattened keys
-          svi_themes: rebuildNestedObject(props, "svi_themes.") as TractDataModel["svi_themes"],
-          places_measures: rebuildNestedObject(props, "places_measures.") as TractDataModel["places_measures"],
-          epa_data: rebuildNestedObject(props, "epa_data.") as TractDataModel["epa_data"],
-        };
-        setSelectedTract(tractData as TractDataModel);
+      // Handle provider cluster click → zoom in
+      if (layerId === "provider-clusters") {
+        const map = mapRef.current?.getMap();
+        if (!map) return;
+        const source = map.getSource("npi-providers") as maplibregl.GeoJSONSource | undefined;
+        if (source && feature.id !== undefined) {
+          (source as unknown as { getClusterExpansionZoom: (id: number, cb: (err: unknown, zoom: number) => void) => void })
+            .getClusterExpansionZoom(feature.id as number, (err: unknown, zoom: number) => {
+              if (err || !feature.geometry || feature.geometry.type !== "Point") return;
+              map.easeTo({
+                center: feature.geometry.coordinates as [number, number],
+                zoom,
+              });
+            });
+        }
+        return;
       }
+
+      // Handle individual provider click
+      if (layerId === "provider-point") {
+        const providerData: NpiProvider = {
+          npi: props.npi as string,
+          entity_type: props.entity_type as string,
+          provider_name: props.provider_name as string,
+          credential: (props.credential as string) || null,
+          gender: (props.gender as string) || null,
+          primary_taxonomy: props.primary_taxonomy as string,
+          taxonomy_description: (props.taxonomy_description as string) || null,
+          provider_type: props.provider_type as string,
+          practice_address: (props.practice_address as string) || null,
+          practice_city: (props.practice_city as string) || null,
+          practice_state: props.practice_state as string,
+          practice_zip: (props.practice_zip as string) || null,
+          phone: (props.phone as string) || null,
+          is_fqhc: props.is_fqhc === true || props.is_fqhc === "true",
+          tract_fips: (props.tract_fips as string) || null,
+          lat: feature.geometry?.type === "Point" ? (feature.geometry.coordinates[1] ?? null) : null,
+          lng: feature.geometry?.type === "Point" ? (feature.geometry.coordinates[0] ?? null) : null,
+        };
+        setSelectedProvider(providerData);
+        return;
+      }
+
+      // Handle tract polygon click
+      const tractData = {
+        geoid: props.geoid as string,
+        state_fips: props.state_fips as string,
+        county_fips: props.county_fips as string,
+        tract_code: props.tract_code as string,
+        name: (props.name as string) || null,
+        total_population: props.total_population as number | null,
+        median_household_income:
+          props.median_household_income as number | null,
+        poverty_rate: props.poverty_rate as number | null,
+        uninsured_rate: props.uninsured_rate as number | null,
+        unemployment_rate: props.unemployment_rate as number | null,
+        median_age: props.median_age as number | null,
+        sdoh_index: props.sdoh_index as number | null,
+        svi_themes: rebuildNestedObject(props, "svi_themes.") as TractDataModel["svi_themes"],
+        places_measures: rebuildNestedObject(props, "places_measures.") as TractDataModel["places_measures"],
+        epa_data: rebuildNestedObject(props, "epa_data.") as TractDataModel["epa_data"],
+      };
+      setSelectedTract(tractData as TractDataModel);
     },
-    [setSelectedTract]
+    [setSelectedTract, setSelectedProvider]
   );
 
   // Build MapLibre expression for fill color based on active metric
@@ -265,7 +351,10 @@ export function MapContainer() {
         mapStyle={MAP_STYLE}
         style={{ width: "100%", height: "100%" }}
         cursor={cursor}
-        interactiveLayerIds={tractsGeoJSON ? ["tract-fill"] : []}
+        interactiveLayerIds={[
+          ...(tractsGeoJSON ? ["tract-fill"] : []),
+          ...(showProviders && providersGeoJSON ? ["provider-point", "provider-clusters"] : []),
+        ]}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
         onClick={onClick}
@@ -339,6 +428,76 @@ export function MapContainer() {
           </Source>
         )}
 
+        {/* NPI Provider clustered points */}
+        {showProviders && providersGeoJSON && (
+          <Source
+            id="npi-providers"
+            type="geojson"
+            data={providersGeoJSON}
+            cluster={true}
+            clusterMaxZoom={14}
+            clusterRadius={50}
+          >
+            {/* Cluster circles */}
+            <Layer
+              id="provider-clusters"
+              type="circle"
+              filter={["has", "point_count"]}
+              paint={{
+                "circle-color": [
+                  "step",
+                  ["get", "point_count"],
+                  "#51bbd6",
+                  10,
+                  "#f1f075",
+                  50,
+                  "#f28cb1",
+                ],
+                "circle-radius": [
+                  "step",
+                  ["get", "point_count"],
+                  15,
+                  10,
+                  20,
+                  50,
+                  25,
+                ],
+              }}
+            />
+            {/* Cluster count labels */}
+            <Layer
+              id="provider-cluster-count"
+              type="symbol"
+              filter={["has", "point_count"]}
+              layout={{
+                "text-field": ["get", "point_count_abbreviated"],
+                "text-size": 12,
+              }}
+            />
+            {/* Individual provider points */}
+            <Layer
+              id="provider-point"
+              type="circle"
+              filter={["!", ["has", "point_count"]]}
+              paint={{
+                "circle-color": [
+                  "case",
+                  ["==", ["get", "is_fqhc"], true],
+                  "#E11D48",
+                  ["==", ["get", "is_fqhc"], "true"],
+                  "#E11D48",
+                  "#2563EB",
+                ],
+                "circle-radius": 6,
+                "circle-stroke-width": 2,
+                "circle-stroke-color": "#ffffff",
+              }}
+            />
+          </Source>
+        )}
+
+        {/* Provider popup */}
+        <ProviderPopup />
       </Map>
 
       {/* Loading indicator */}

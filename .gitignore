@@ -29,3 +29,5 @@ pgdata/
 geohealth-api-summary
 
 site/
+
+.vercel

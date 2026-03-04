@@ -718,3 +718,58 @@ class WebhookListResponse(BaseModel):
 
     total: int = Field(..., description="Total subscriptions")
     webhooks: list[WebhookResponse] = Field(..., description="Subscriptions")
+
+
+# ---------------------------------------------------------------------------
+# /v1/providers
+# ---------------------------------------------------------------------------
+
+
+class ProviderModel(BaseModel):
+    """Individual NPI provider record."""
+
+    npi: str = Field(..., description="10-digit National Provider Identifier")
+    entity_type: str = Field(
+        ..., description="1=individual provider, 2=organization"
+    )
+    provider_name: str = Field(..., description="Provider or organization name")
+    credential: str | None = Field(None, description="Credential (MD, DO, NP, etc.)")
+    gender: str | None = Field(None, description="M or F (individuals only)")
+    primary_taxonomy: str = Field(
+        ..., description="Primary taxonomy code (e.g., 207Q00000X)"
+    )
+    taxonomy_description: str | None = Field(
+        None, description="Human-readable taxonomy description"
+    )
+    provider_type: str = Field(
+        ...,
+        description="Classification: pcp, fqhc, urgent_care, rural_health_clinic, etc.",
+    )
+    practice_address: str | None = Field(None, description="Street address")
+    practice_city: str | None = Field(None, description="City")
+    practice_state: str = Field(..., description="2-letter state code")
+    practice_zip: str | None = Field(None, description="5-digit ZIP code")
+    phone: str | None = Field(None, description="Practice phone number")
+    is_fqhc: bool = Field(
+        ..., description="True if provider is a Federally Qualified Health Center"
+    )
+    tract_fips: str | None = Field(
+        None, description="11-digit census tract FIPS code"
+    )
+    lat: float | None = Field(None, description="Latitude")
+    lng: float | None = Field(None, description="Longitude")
+    distance_miles: float | None = Field(
+        None, description="Distance from search center (radius queries only)"
+    )
+
+
+class ProvidersResponse(BaseModel):
+    """Paginated list of NPI providers."""
+
+    count: int = Field(..., description="Number of providers in this page")
+    total: int = Field(..., description="Total matching providers")
+    offset: int = Field(..., description="Number of rows skipped")
+    limit: int = Field(..., description="Maximum rows per page")
+    providers: list[ProviderModel] = Field(
+        ..., description="Provider records"
+    )

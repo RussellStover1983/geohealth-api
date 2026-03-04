@@ -262,6 +262,39 @@ export interface DemandDetailResponse {
   data_vintage: DpcDataVintage;
 }
 
+// ---------------------------------------------------------------------------
+// NPI Provider types
+// ---------------------------------------------------------------------------
+
+export interface NpiProvider {
+  npi: string;
+  entity_type: string;
+  provider_name: string;
+  credential: string | null;
+  gender: string | null;
+  primary_taxonomy: string;
+  taxonomy_description: string | null;
+  provider_type: string;
+  practice_address: string | null;
+  practice_city: string | null;
+  practice_state: string;
+  practice_zip: string | null;
+  phone: string | null;
+  is_fqhc: boolean;
+  tract_fips: string | null;
+  lat: number | null;
+  lng: number | null;
+  distance_miles?: number;
+}
+
+export interface ProvidersResponse {
+  count: number;
+  total: number;
+  offset: number;
+  limit: number;
+  providers: NpiProvider[];
+}
+
 export interface SupplyDetailResponse {
   location: ResolvedLocation;
   pcp_count: number;

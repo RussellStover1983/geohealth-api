@@ -408,6 +408,81 @@ curl -H "X-API-Key: your-key" \
 
 ---
 
+## GET /v1/providers/geojson — Provider Map Data
+
+Returns NPI providers as a GeoJSON FeatureCollection with Point geometries for map rendering. Uses bounding box filtering with a PostGIS spatial index.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `bbox` | string | Yes | Bounding box: `west,south,east,north` (comma-separated floats) |
+| `provider_type` | string | No | Filter: `all`, `pcp`, `fqhc`, `urgent_care`, `rural_health_clinic` (default: `all`) |
+| `limit` | int | No | Max providers to return (default: 500, max: 2000) |
+
+### Example
+
+```bash
+curl -H "X-API-Key: your-key" \
+  "https://geohealth-api-production.up.railway.app/v1/providers/geojson?bbox=-95.0,38.5,-94.0,39.5&provider_type=pcp"
+```
+
+### Response
+
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-94.583, 39.111]},
+      "properties": {
+        "npi": "1234567890",
+        "provider_name": "Jane Smith",
+        "credential": "MD",
+        "primary_taxonomy": "207Q00000X",
+        "taxonomy_description": "Family Medicine",
+        "provider_type": "pcp",
+        "practice_address": "123 Main St",
+        "practice_city": "Kansas City",
+        "practice_state": "MO",
+        "practice_zip": "64108",
+        "phone": "8165551234",
+        "is_fqhc": false,
+        "entity_type": "1"
+      }
+    }
+  ]
+}
+```
+
+---
+
+## GET /v1/providers — Provider Search
+
+Search for NPI providers by radius around a point or by census tract FIPS code. Returns a paginated JSON list.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `lat` | float | One of lat/lng or tract_fips | Center latitude |
+| `lng` | float | One of lat/lng or tract_fips | Center longitude |
+| `radius` | float | No | Radius in miles (default: 5, max: 50) |
+| `tract_fips` | string | One of lat/lng or tract_fips | 11-digit census tract FIPS |
+| `provider_type` | string | No | Filter: `all`, `pcp`, `fqhc`, `urgent_care`, etc. (default: `all`) |
+| `limit` | int | No | Max results (default: 50, max: 500) |
+| `offset` | int | No | Pagination offset (default: 0) |
+
+### Example
+
+```bash
+curl -H "X-API-Key: your-key" \
+  "https://geohealth-api-production.up.railway.app/v1/providers?lat=39.1&lng=-94.5&radius=5&provider_type=pcp"
+```
+
+---
+
 ## System Endpoints
 
 These endpoints do not require authentication.

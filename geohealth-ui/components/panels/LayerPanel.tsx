@@ -1,14 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Layers } from "lucide-react";
+import { ChevronDown, ChevronRight, Layers, Stethoscope } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useGeoHealthStore } from "@/lib/store";
 import { METRIC_CATEGORIES } from "@/lib/map/styles";
 import { cn } from "@/lib/utils";
 
+const PROVIDER_FILTERS = [
+  { key: "all", label: "All Providers" },
+  { key: "pcp", label: "PCPs" },
+  { key: "fqhc", label: "FQHCs" },
+  { key: "urgent_care", label: "Urgent Care" },
+  { key: "rural_health_clinic", label: "Rural Health" },
+] as const;
+
 export function LayerPanel() {
-  const { activeLayer, setActiveLayer } = useGeoHealthStore();
+  const { activeLayer, setActiveLayer, showProviders, setShowProviders, providerFilter, setProviderFilter } = useGeoHealthStore();
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
     "DPC Market Fit": true,
     Composite: true,
@@ -32,6 +40,45 @@ export function LayerPanel() {
       </div>
 
       <div className="flex-1 space-y-0.5 px-2">
+        {/* NPI Provider toggle */}
+        <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 mb-2">
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={showProviders}
+              onChange={(e) => setShowProviders(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-stone-300 text-accent-600 focus:ring-accent-500"
+            />
+            <Stethoscope className="h-3.5 w-3.5 text-accent-600" />
+            <span className="text-xs font-medium text-stone-700">
+              Show NPI Providers
+            </span>
+          </label>
+          {showProviders && (
+            <div className="mt-2 flex flex-wrap gap-1 ml-6">
+              {PROVIDER_FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setProviderFilter(f.key)}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors",
+                    providerFilter === f.key
+                      ? "bg-accent-100 text-accent-700"
+                      : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {showProviders && (
+            <p className="mt-1.5 ml-6 text-[10px] text-stone-400">
+              Zoom to level 9+ to see provider pins
+            </p>
+          )}
+        </div>
+
         {METRIC_CATEGORIES.map((category) => {
           const isOpen = openCategories[category.name] ?? false;
           const hasActive = category.metrics.some((m) => m.key === activeLayer);
