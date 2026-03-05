@@ -76,7 +76,7 @@ def classify_provider_type(taxonomy: str, pcp_codes: set[str], facility_codes: s
         return "fqhc"
     if taxonomy == "261QU0200X":
         return "urgent_care"
-    if taxonomy == "261QR0200X":
+    if taxonomy == "261QR1300X":
         return "rural_health_clinic"
     if taxonomy in facility_codes:
         return "facility"
