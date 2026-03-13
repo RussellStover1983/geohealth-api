@@ -1,7 +1,8 @@
 "use client";
 
 import { Suspense, lazy } from "react";
-import { PanelLeftClose, PanelLeft } from "lucide-react";
+import Link from "next/link";
+import { PanelLeftClose, PanelLeft, BookOpen } from "lucide-react";
 import { Logo } from "./Logo";
 import { SearchPanel } from "@/components/panels/SearchPanel";
 import { LayerPanel } from "@/components/panels/LayerPanel";
@@ -34,6 +35,13 @@ export function AppShell() {
         <div className="flex items-center gap-2">
           <Badge label="4 states" />
           <Badge label="6,784 tracts" />
+          <Link
+            href="/methodology"
+            className="hidden items-center gap-1 rounded-full bg-stone-100 px-2.5 py-0.5 text-[10px] font-medium text-stone-500 hover:bg-stone-200 hover:text-stone-700 transition-colors lg:inline-flex"
+          >
+            <BookOpen className="h-3 w-3" />
+            Methodology
+          </Link>
         </div>
       </header>
 

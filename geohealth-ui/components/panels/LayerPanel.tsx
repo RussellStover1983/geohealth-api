@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Layers, Stethoscope } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, ChevronRight, Layers, Stethoscope, BookOpen } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useGeoHealthStore } from "@/lib/store";
 import { METRIC_CATEGORIES } from "@/lib/map/styles";
@@ -109,6 +110,9 @@ export function LayerPanel() {
               </CollapsibleTrigger>
 
               <CollapsibleContent>
+                <p className="ml-9 mb-1 text-[10px] leading-snug text-stone-400">
+                  {category.description}
+                </p>
                 <div className="ml-5 space-y-0.5 pb-1">
                   {category.metrics.map((metric) => {
                     const isActive = activeLayer === metric.key;
@@ -141,6 +145,17 @@ export function LayerPanel() {
             </Collapsible>
           );
         })}
+      </div>
+
+      {/* Methodology link */}
+      <div className="border-t border-stone-200 px-5 py-2">
+        <Link
+          href="/methodology"
+          className="flex items-center gap-1.5 text-[10px] text-stone-400 hover:text-teal-600 transition-colors"
+        >
+          <BookOpen className="h-3 w-3" />
+          Data sources &amp; methodology
+        </Link>
       </div>
     </div>
   );

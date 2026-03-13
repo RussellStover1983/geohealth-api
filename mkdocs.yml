@@ -33,7 +33,9 @@ nav:
   - Home: index.md
   - Quick Start: quickstart.md
   - API Reference: api-reference.md
+  - Error Handling: errors.md
   - Data Dictionary: data-dictionary.md
+  - Data Sources & Methodology: methodology.md
   - Python SDK & MCP: sdk.md
 
 markdown_extensions:

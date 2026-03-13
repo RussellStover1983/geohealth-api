@@ -32,6 +32,7 @@ import { TrendSparkline } from "@/components/charts/TrendSparkline";
 import { MetricBar } from "@/components/charts/MetricBar";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import type { TractDataModel } from "@/lib/api/types";
+import { SourceAttribution } from "@/components/shared/SourceAttribution";
 
 function SdohPill({ value }: { value: number | null }) {
   if (value == null) return null;
@@ -85,6 +86,9 @@ function DemographicsCard({ tract }: { tract: TractDataModel }) {
         <CardTitle className="flex items-center gap-2">
           <Users className="h-4 w-4 text-accent-600" />
           Demographics
+          <span className="ml-auto">
+            <SourceAttribution componentKey="demographics" />
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -120,11 +124,14 @@ function EpaCard({ epa }: { epa: NonNullable<TractDataModel["epa_data"]> }) {
         <CardTitle className="flex items-center gap-2">
           <Leaf className="h-4 w-4 text-accent-600" />
           Environmental (EPA)
-          {epa._source && (
-            <Badge variant="secondary" className="ml-auto text-[10px]">
-              {epa._source === "ejscreen_api" ? "EPA Data" : "Estimated"}
-            </Badge>
-          )}
+          <span className="ml-auto flex items-center gap-1.5">
+            {epa._source && (
+              <Badge variant="secondary" className="text-[10px]">
+                {epa._source === "ejscreen_api" ? "EPA Data" : "Estimated"}
+              </Badge>
+            )}
+            <SourceAttribution componentKey="environmental" />
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2.5">
@@ -193,6 +200,9 @@ function TrendsCard({ geoid }: { geoid: string }) {
         <CardTitle className="flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-accent-600" />
           Trends (2018–2022)
+          <span className="ml-auto">
+            <SourceAttribution componentKey="trends" />
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -282,6 +292,9 @@ export function TractDetailPanel() {
                       <CardTitle className="flex items-center gap-2">
                         <Shield className="h-4 w-4 text-accent-600" />
                         Social Vulnerability Index
+                        <span className="ml-auto">
+                          <SourceAttribution componentKey="svi" />
+                        </span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -297,6 +310,9 @@ export function TractDetailPanel() {
                       <CardTitle className="flex items-center gap-2">
                         <Heart className="h-4 w-4 text-accent-600" />
                         Health Outcomes
+                        <span className="ml-auto">
+                          <SourceAttribution componentKey="health_outcomes" />
+                        </span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
