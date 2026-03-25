@@ -15,7 +15,9 @@ from app.services.npi_registry import NPIData
 
 logger = logging.getLogger(__name__)
 
-_NPI_TRACT_CSV_PATH = Path(__file__).parent.parent / "data" / "npi_tract_counts.csv"
+_SHARED_DERIVED = Path(__file__).resolve().parent.parent.parent.parent.parent / "shared" / "data" / "nppes" / "derived"
+_LOCAL_DATA = Path(__file__).parent.parent / "data"
+_NPI_TRACT_CSV_PATH = (_SHARED_DERIVED if _SHARED_DERIVED.exists() else _LOCAL_DATA) / "npi_tract_counts.csv"
 
 # Lazy-loaded in-memory index: tract_fips → row dict
 _NPI_TRACT_INDEX: dict[str, dict] | None = None

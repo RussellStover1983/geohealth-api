@@ -284,6 +284,43 @@ export function useMarketFit(geoid: string | null) {
   return state;
 }
 
+export function useProviders(tractFips: string | null, enabled: boolean) {
+  const [state, setState] = useState<AsyncState<GeoJSON.FeatureCollection>>({
+    data: null,
+    error: null,
+    isLoading: false,
+  });
+
+  useEffect(() => {
+    if (!tractFips || !enabled) {
+      setState({ data: null, error: null, isLoading: false });
+      return;
+    }
+
+    let cancelled = false;
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+    api.providers({ tract_fips: tractFips }).then(
+      (data) => {
+        if (!cancelled) setState({ data, error: null, isLoading: false });
+      },
+      (err) => {
+        if (!cancelled) {
+          const message =
+            err instanceof ApiError ? err.detail : "Failed to load providers";
+          setState({ data: null, error: message, isLoading: false });
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tractFips, enabled]);
+
+  return state;
+}
+
 export function useDataDictionary() {
   const [state, setState] = useState<AsyncState<DictionaryResponse>>({
     data: null,

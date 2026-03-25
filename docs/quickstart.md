@@ -152,5 +152,6 @@ All errors return structured JSON:
 ## Next Steps
 
 - [**API Reference**](api-reference.md) — All 6 endpoints with full parameter docs
+- [**Error Handling**](errors.md) — Every error code, detail message, and fix
 - [**Data Dictionary**](data-dictionary.md) — What every field means clinically
 - [**Python SDK & MCP**](sdk.md) — Typed client library and AI agent integration

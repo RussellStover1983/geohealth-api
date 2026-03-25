@@ -163,7 +163,7 @@ class TestProcessNPPESStream:
         ]
         reader = self._make_reader(rows)
 
-        result = process_nppes_stream(reader, crosswalk, pcp_codes, facility_map)
+        result, _ = process_nppes_stream(reader, crosswalk, pcp_codes, facility_map)
 
         assert "29095001100" in result
         assert result["29095001100"]["pcp_count"] == 0.6
@@ -184,7 +184,7 @@ class TestProcessNPPESStream:
         ]
         reader = self._make_reader(rows)
 
-        result = process_nppes_stream(reader, crosswalk, pcp_codes, facility_map)
+        result, _ = process_nppes_stream(reader, crosswalk, pcp_codes, facility_map)
 
         assert "20209000100" in result
         assert result["20209000100"]["fqhc_count"] == 1.0
@@ -201,7 +201,7 @@ class TestProcessNPPESStream:
         ]
         reader = self._make_reader(rows)
 
-        result = process_nppes_stream(reader, crosswalk, pcp_codes, facility_map)
+        result, _ = process_nppes_stream(reader, crosswalk, pcp_codes, facility_map)
         assert len(result) == 0
 
     def test_non_pcp_taxonomy_skipped(self):
@@ -217,7 +217,7 @@ class TestProcessNPPESStream:
         ]
         reader = self._make_reader(rows)
 
-        result = process_nppes_stream(reader, crosswalk, pcp_codes, facility_map)
+        result, _ = process_nppes_stream(reader, crosswalk, pcp_codes, facility_map)
         assert len(result) == 0
 
     def test_state_filter(self):
@@ -230,7 +230,7 @@ class TestProcessNPPESStream:
         ]
         reader = self._make_reader(rows)
 
-        result = process_nppes_stream(
+        result, _ = process_nppes_stream(
             reader, crosswalk, pcp_codes, facility_map,
             state_filter={"MO"},
         )
@@ -250,7 +250,7 @@ class TestProcessNPPESStream:
         ]
         reader = self._make_reader(rows)
 
-        result = process_nppes_stream(reader, crosswalk, pcp_codes, facility_map)
+        result, _ = process_nppes_stream(reader, crosswalk, pcp_codes, facility_map)
 
         # 3 PCPs × 0.6 ratio = 1.8 for tract 29095001100
         assert abs(result["29095001100"]["pcp_count"] - 1.8) < 0.01

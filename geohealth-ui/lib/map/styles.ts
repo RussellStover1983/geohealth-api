@@ -32,9 +32,25 @@ export const METRIC_CATEGORIES: {
     metrics: [
       {
         key: "dpc_market_fit",
-        label: "DPC Market Fit",
+        label: "Overall Estimate",
         unit: "score",
         range: [30, 75],
+        highIsBad: false,
+        decimals: 0,
+      },
+      {
+        key: "dpc_demand",
+        label: "Demand",
+        unit: "score",
+        range: [0, 100],
+        highIsBad: false,
+        decimals: 0,
+      },
+      {
+        key: "dpc_affordability",
+        label: "Affordability",
+        unit: "score",
+        range: [0, 100],
         highIsBad: false,
         decimals: 0,
       },

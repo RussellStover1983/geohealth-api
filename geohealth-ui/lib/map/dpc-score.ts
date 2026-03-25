@@ -30,63 +30,78 @@ function getNestedProp(props: Record<string, unknown>, key: string): number | nu
 }
 
 /**
- * Compute a DPC Market Fit estimate (0-100) from GeoJSON feature properties.
- * Returns null if insufficient data is available.
+ * Compute the DPC Demand sub-score (0-100) from GeoJSON feature properties.
+ * Returns null if no demand indicators are available.
  */
-export function computeDpcEstimate(props: Record<string, unknown>): number | null {
-  // --- Demand dimension (weight 0.25) ---
-  const demandIndicators: { score: number; weight: number }[] = [];
+export function computeDpcDemand(props: Record<string, unknown>): number | null {
+  const indicators: { score: number; weight: number }[] = [];
 
   const uninsuredRate = getNestedProp(props, "uninsured_rate");
   if (uninsuredRate != null) {
     let s = normalize(uninsuredRate, 2, 40);
     if (uninsuredRate > 35) s *= 0.8;
-    demandIndicators.push({ score: s, weight: 0.25 });
+    indicators.push({ score: s, weight: 0.25 });
   }
 
   const diabetes = getNestedProp(props, "places_measures.diabetes");
   const obesity = getNestedProp(props, "places_measures.obesity");
   if (diabetes != null && obesity != null) {
     const burden = (diabetes + obesity) / 2;
-    demandIndicators.push({ score: normalize(burden, 5, 35), weight: 0.25 });
+    indicators.push({ score: normalize(burden, 5, 35), weight: 0.25 });
   }
 
   const sviSES = getNestedProp(props, "svi_themes.rpl_theme1");
   if (sviSES != null) {
-    demandIndicators.push({ score: normalize(sviSES, 0, 1), weight: 0.15 });
+    indicators.push({ score: normalize(sviSES, 0, 1), weight: 0.15 });
   }
 
   const totalPop = getNestedProp(props, "total_population");
   if (totalPop != null) {
-    demandIndicators.push({ score: normalize(totalPop, 500, 10000), weight: 0.15 });
+    indicators.push({ score: normalize(totalPop, 500, 10000), weight: 0.15 });
   }
 
-  if (demandIndicators.length === 0) return null;
+  if (indicators.length === 0) return null;
+  return Math.round(weightedAvg(indicators) * 10) / 10;
+}
 
-  const demandScore = weightedAvg(demandIndicators);
-
-  // --- Affordability dimension (weight 0.20) ---
-  const affordIndicators: { score: number; weight: number }[] = [];
+/**
+ * Compute the DPC Affordability sub-score (0-100) from GeoJSON feature properties.
+ * Returns null if no affordability indicators are available.
+ */
+export function computeDpcAffordability(props: Record<string, unknown>): number | null {
+  const indicators: { score: number; weight: number }[] = [];
 
   const income = getNestedProp(props, "median_household_income");
   if (income != null) {
-    affordIndicators.push({ score: normalize(income, 15000, 150000), weight: 0.35 });
+    indicators.push({ score: normalize(income, 15000, 150000), weight: 0.35 });
   }
 
   const povertyRate = getNestedProp(props, "poverty_rate");
   if (povertyRate != null) {
-    affordIndicators.push({ score: invert(normalize(povertyRate, 0, 40)), weight: 0.30 });
+    indicators.push({ score: invert(normalize(povertyRate, 0, 40)), weight: 0.30 });
   }
 
   const unemploymentRate = getNestedProp(props, "unemployment_rate");
   if (unemploymentRate != null) {
-    affordIndicators.push({
+    indicators.push({
       score: invert(normalize(unemploymentRate, 0, 25)),
       weight: 0.20,
     });
   }
 
-  const affordScore = affordIndicators.length > 0 ? weightedAvg(affordIndicators) : 50;
+  if (indicators.length === 0) return null;
+  return Math.round(weightedAvg(indicators) * 10) / 10;
+}
+
+/**
+ * Compute a DPC Market Fit estimate (0-100) from GeoJSON feature properties.
+ * Returns null if insufficient data is available.
+ */
+export function computeDpcEstimate(props: Record<string, unknown>): number | null {
+  const demandScore = computeDpcDemand(props);
+  if (demandScore == null) return null;
+
+  const affordScore = computeDpcAffordability(props) ?? 50;
 
   // Composite: demand * 0.25 + affordability * 0.20 + neutral placeholders for
   // supply_gap (0.25 * 50), employer (0.20 * 50), competition (0.10 * 50)

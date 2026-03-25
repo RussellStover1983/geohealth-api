@@ -16,6 +16,7 @@ from app.routers.competition import router as competition_router
 from app.routers.demand import router as demand_router
 from app.routers.employer import router as employer_router
 from app.routers.market_fit import router as market_fit_router
+from app.routers.providers import router as providers_router
 from app.routers.supply import router as supply_router
 
 logger = logging.getLogger("dpc_market_fit")
@@ -62,6 +63,10 @@ _OPENAPI_TAGS = [
     {
         "name": "competition",
         "description": "Competition/saturation analysis (Phase 3).",
+    },
+    {
+        "name": "providers",
+        "description": "Individual provider lookup for map plotting.",
     },
     {
         "name": "system",
@@ -154,6 +159,7 @@ app.include_router(demand_router)
 app.include_router(supply_router)
 app.include_router(employer_router)
 app.include_router(competition_router)
+app.include_router(providers_router)
 
 
 # ---------------------------------------------------------------------------

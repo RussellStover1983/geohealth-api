@@ -4,6 +4,8 @@ Base URL: `https://geohealth-api-production.up.railway.app`
 
 All `/v1/*` endpoints require an `X-API-Key` header. System endpoints (`/health`, `/metrics`) are public.
 
+> For error response formats and troubleshooting, see [Error Handling](errors.md).
+
 ---
 
 ## GET /v1/context — Primary Lookup
@@ -49,14 +51,50 @@ Look up health context for an address or coordinates. This is the main endpoint.
     "state_fips": "27",
     "county_fips": "053",
     "tract_code": "026200",
+    "name": "Census Tract 262, Hennepin County, MN",
     "total_population": 4521,
     "median_household_income": 72500.0,
     "poverty_rate": 11.3,
     "uninsured_rate": 5.8,
     "unemployment_rate": 4.2,
     "median_age": 34.7,
-    "svi_themes": { "rpl_theme1": 0.35, "rpl_theme2": 0.42, "rpl_theme3": 0.61, "rpl_theme4": 0.28, "rpl_themes": 0.44 },
-    "places_measures": { "diabetes": 9.1, "obesity": 28.4, "mhlth": 14.7, "...": "..." },
+    "svi_themes": {
+      "rpl_theme1": 0.35,
+      "rpl_theme2": 0.42,
+      "rpl_theme3": 0.61,
+      "rpl_theme4": 0.28,
+      "rpl_themes": 0.44
+    },
+    "places_measures": {
+      "diabetes": 9.1,
+      "obesity": 28.4,
+      "mhlth": 14.7,
+      "phlth": 12.3,
+      "bphigh": 29.8,
+      "casthma": 9.5,
+      "chd": 5.9,
+      "csmoking": 15.1,
+      "access2": 7.2,
+      "checkup": 74.6,
+      "dental": 65.3,
+      "sleep": 35.2,
+      "lpa": 22.3,
+      "binge": 18.6
+    },
+    "epa_data": {
+      "pm25": 8.2,
+      "ozone": 42.1,
+      "diesel_pm": 0.31,
+      "air_toxics_cancer_risk": 28.0,
+      "respiratory_hazard_index": 0.38,
+      "traffic_proximity": 140.5,
+      "lead_paint_pct": 0.42,
+      "superfund_proximity": 0.22,
+      "rmp_proximity": 0.65,
+      "hazardous_waste_proximity": 1.1,
+      "wastewater_discharge": 4.7,
+      "_source": "ejscreen_api"
+    },
     "sdoh_index": 0.41
   },
   "narrative": "This census tract in Hennepin County..."
@@ -92,17 +130,130 @@ curl -X POST -H "X-API-Key: your-key" -H "Content-Type: application/json" \
 
 ```json
 {
+  "total": 2,
+  "succeeded": 2,
+  "failed": 0,
   "results": [
     {
       "address": "1234 Main St, Minneapolis, MN",
-      "location": { "lat": 44.9778, "lng": -93.265, "matched_address": "..." },
-      "tract": { "geoid": "27053026200", "...": "..." },
+      "status": "ok",
+      "location": {
+        "lat": 44.9778,
+        "lng": -93.265,
+        "matched_address": "1234 Main St, Minneapolis, MN 55401"
+      },
+      "tract": {
+        "geoid": "27053026200",
+        "state_fips": "27",
+        "county_fips": "053",
+        "tract_code": "026200",
+        "name": "Census Tract 262, Hennepin County, MN",
+        "total_population": 4521,
+        "median_household_income": 72500.0,
+        "poverty_rate": 11.3,
+        "uninsured_rate": 5.8,
+        "unemployment_rate": 4.2,
+        "median_age": 34.7,
+        "svi_themes": {
+          "rpl_theme1": 0.35,
+          "rpl_theme2": 0.42,
+          "rpl_theme3": 0.61,
+          "rpl_theme4": 0.28,
+          "rpl_themes": 0.44
+        },
+        "places_measures": {
+          "diabetes": 9.1,
+          "obesity": 28.4,
+          "mhlth": 14.7,
+          "phlth": 12.3,
+          "bphigh": 29.8,
+          "casthma": 9.5,
+          "chd": 5.9,
+          "csmoking": 15.1,
+          "access2": 7.2,
+          "checkup": 74.6,
+          "dental": 65.3,
+          "sleep": 35.2,
+          "lpa": 22.3,
+          "binge": 18.6
+        },
+        "epa_data": {
+          "pm25": 8.2,
+          "ozone": 42.1,
+          "diesel_pm": 0.31,
+          "air_toxics_cancer_risk": 28.0,
+          "respiratory_hazard_index": 0.38,
+          "traffic_proximity": 140.5,
+          "lead_paint_pct": 0.42,
+          "superfund_proximity": 0.22,
+          "rmp_proximity": 0.65,
+          "hazardous_waste_proximity": 1.1,
+          "wastewater_discharge": 4.7,
+          "_source": "ejscreen_api"
+        },
+        "sdoh_index": 0.41
+      },
       "error": null
     },
     {
       "address": "456 Oak Ave, St Paul, MN",
-      "location": { "lat": 44.9537, "lng": -93.09, "matched_address": "..." },
-      "tract": { "geoid": "27123004500", "...": "..." },
+      "status": "ok",
+      "location": {
+        "lat": 44.9537,
+        "lng": -93.09,
+        "matched_address": "456 Oak Ave, St Paul, MN 55101"
+      },
+      "tract": {
+        "geoid": "27123004500",
+        "state_fips": "27",
+        "county_fips": "123",
+        "tract_code": "004500",
+        "name": "Census Tract 45, Ramsey County, MN",
+        "total_population": 3842,
+        "median_household_income": 58200.0,
+        "poverty_rate": 16.7,
+        "uninsured_rate": 8.1,
+        "unemployment_rate": 5.9,
+        "median_age": 31.2,
+        "svi_themes": {
+          "rpl_theme1": 0.52,
+          "rpl_theme2": 0.48,
+          "rpl_theme3": 0.73,
+          "rpl_theme4": 0.41,
+          "rpl_themes": 0.58
+        },
+        "places_measures": {
+          "diabetes": 10.8,
+          "obesity": 31.2,
+          "mhlth": 16.4,
+          "phlth": 13.9,
+          "bphigh": 32.1,
+          "casthma": 10.7,
+          "chd": 6.4,
+          "csmoking": 17.3,
+          "access2": 9.1,
+          "checkup": 71.2,
+          "dental": 59.8,
+          "sleep": 38.1,
+          "lpa": 25.6,
+          "binge": 19.4
+        },
+        "epa_data": {
+          "pm25": 8.5,
+          "ozone": 43.0,
+          "diesel_pm": 0.28,
+          "air_toxics_cancer_risk": 26.5,
+          "respiratory_hazard_index": 0.35,
+          "traffic_proximity": 120.3,
+          "lead_paint_pct": 0.51,
+          "superfund_proximity": 0.18,
+          "rmp_proximity": 0.72,
+          "hazardous_waste_proximity": 0.9,
+          "wastewater_discharge": 3.8,
+          "_source": "ejscreen_api"
+        },
+        "sdoh_index": 0.53
+      },
       "error": null
     }
   ]
@@ -141,15 +292,34 @@ curl -H "X-API-Key: your-key" \
 {
   "center": { "lat": 44.9778, "lng": -93.265 },
   "radius_miles": 5.0,
+  "count": 2,
   "total": 42,
+  "offset": 0,
+  "limit": 10,
   "tracts": [
     {
       "geoid": "27053026200",
+      "name": "Census Tract 262, Hennepin County, MN",
       "distance_miles": 0.3,
       "total_population": 4521,
+      "median_household_income": 72500.0,
       "poverty_rate": 11.3,
-      "sdoh_index": 0.41,
-      "...": "..."
+      "uninsured_rate": 5.8,
+      "unemployment_rate": 4.2,
+      "median_age": 34.7,
+      "sdoh_index": 0.41
+    },
+    {
+      "geoid": "27053026300",
+      "name": "Census Tract 263, Hennepin County, MN",
+      "distance_miles": 1.2,
+      "total_population": 3876,
+      "median_household_income": 61200.0,
+      "poverty_rate": 14.9,
+      "uninsured_rate": 7.3,
+      "unemployment_rate": 5.1,
+      "median_age": 32.4,
+      "sdoh_index": 0.49
     }
   ]
 }
@@ -189,12 +359,42 @@ Compare two tracts side-by-side, or compare a tract against state or national av
 
 ```json
 {
-  "tract1": { "geoid": "27053026200", "poverty_rate": 11.3, "...": "..." },
-  "tract2": { "geoid": "27053026300", "poverty_rate": 18.7, "...": "..." },
+  "a": {
+    "type": "tract",
+    "geoid": "27053026200",
+    "label": "Census Tract 262, Hennepin County, MN",
+    "values": {
+      "total_population": 4521.0,
+      "median_household_income": 72500.0,
+      "poverty_rate": 11.3,
+      "uninsured_rate": 5.8,
+      "unemployment_rate": 4.2,
+      "median_age": 34.7,
+      "sdoh_index": 0.41
+    }
+  },
+  "b": {
+    "type": "tract",
+    "geoid": "27053026300",
+    "label": "Census Tract 263, Hennepin County, MN",
+    "values": {
+      "total_population": 3876.0,
+      "median_household_income": 61200.0,
+      "poverty_rate": 14.9,
+      "uninsured_rate": 7.3,
+      "unemployment_rate": 5.1,
+      "median_age": 32.4,
+      "sdoh_index": 0.49
+    }
+  },
   "differences": {
-    "poverty_rate": 7.4,
-    "sdoh_index": 0.15,
-    "...": "..."
+    "total_population": 645.0,
+    "median_household_income": 11300.0,
+    "poverty_rate": -3.6,
+    "uninsured_rate": -1.5,
+    "unemployment_rate": -0.9,
+    "median_age": 2.3,
+    "sdoh_index": -0.08
   }
 }
 ```
@@ -225,10 +425,35 @@ curl -H "X-API-Key: your-key" \
   "geoid": "27053026200",
   "name": "Census Tract 262",
   "years": [
-    { "year": 2018, "total_population": 4200, "poverty_rate": 14.1, "...": "..." },
-    { "year": 2022, "total_population": 4521, "poverty_rate": 11.3, "...": "..." }
+    {
+      "year": 2018,
+      "total_population": 4200,
+      "median_household_income": 64800.0,
+      "poverty_rate": 14.1,
+      "uninsured_rate": 7.6,
+      "unemployment_rate": 5.3,
+      "median_age": 33.1
+    },
+    {
+      "year": 2022,
+      "total_population": 4521,
+      "median_household_income": 72500.0,
+      "poverty_rate": 11.3,
+      "uninsured_rate": 5.8,
+      "unemployment_rate": 4.2,
+      "median_age": 34.7
+    }
   ],
   "changes": [
+    {
+      "metric": "total_population",
+      "earliest_year": 2018,
+      "latest_year": 2022,
+      "earliest_value": 4200.0,
+      "latest_value": 4521.0,
+      "absolute_change": 321.0,
+      "percent_change": 7.64
+    },
     {
       "metric": "poverty_rate",
       "earliest_year": 2018,
@@ -237,6 +462,15 @@ curl -H "X-API-Key: your-key" \
       "latest_value": 11.3,
       "absolute_change": -2.8,
       "percent_change": -19.86
+    },
+    {
+      "metric": "median_household_income",
+      "earliest_year": 2018,
+      "latest_year": 2022,
+      "earliest_value": 64800.0,
+      "latest_value": 72500.0,
+      "absolute_change": 7700.0,
+      "percent_change": 11.88
     }
   ]
 }
@@ -279,6 +513,20 @@ curl -H "X-API-Key: your-key" \
       "county_percentile": 45.2,
       "state_percentile": 52.1,
       "national_percentile": 38.7
+    },
+    {
+      "metric": "uninsured_rate",
+      "value": 5.8,
+      "county_percentile": 32.4,
+      "state_percentile": 41.6,
+      "national_percentile": 22.1
+    },
+    {
+      "metric": "median_household_income",
+      "value": 72500.0,
+      "county_percentile": 58.3,
+      "state_percentile": 65.9,
+      "national_percentile": 61.4
     }
   ],
   "averages": [
@@ -288,6 +536,20 @@ curl -H "X-API-Key: your-key" \
       "county_avg": 12.8,
       "state_avg": 10.1,
       "national_avg": 13.4
+    },
+    {
+      "metric": "uninsured_rate",
+      "tract_value": 5.8,
+      "county_avg": 6.9,
+      "state_avg": 5.3,
+      "national_avg": 9.2
+    },
+    {
+      "metric": "median_household_income",
+      "tract_value": 72500.0,
+      "county_avg": 78400.0,
+      "state_avg": 68900.0,
+      "national_avg": 65000.0
     }
   ]
 }
@@ -330,8 +592,145 @@ curl -X DELETE -H "X-API-Key: your-key" \
   "https://geohealth-api-production.up.railway.app/v1/webhooks/1"
 ```
 
-!!! info "Webhook payloads"
-    Payloads include an `X-Webhook-Signature` header (when a secret is configured) containing `sha256=<hmac>` for verification. Delivery uses exponential backoff with up to 3 retries on 5xx errors.
+---
+
+## Webhook Payload Format
+
+Every webhook delivery is a POST request to your callback URL with the following structure.
+
+### Headers
+
+| Header | Description |
+|--------|-------------|
+| `Content-Type` | `application/json` |
+| `X-Webhook-Signature` | `sha256=<hex>` (only if `secret` was set on the subscription) |
+
+### Body
+
+```json
+{
+  "event": "data.updated",
+  "timestamp": "2026-03-06T12:00:00+00:00",
+  "data": {
+    "state_fips": "27",
+    "geoid": "27053026200",
+    "updated_fields": ["places_measures", "epa_data"]
+  }
+}
+```
+
+## Verifying Webhook Signatures
+
+If you set a `secret` when creating the subscription, every delivery includes an `X-Webhook-Signature` header. Verify it to ensure the payload was not tampered with.
+
+The signature is computed as: `HMAC-SHA256(secret, raw_request_body)` and sent in the format `sha256=<hex_digest>`.
+
+### Python verification example
+
+```python
+import hashlib
+import hmac
+
+from fastapi import FastAPI, Request, HTTPException
+
+app = FastAPI()
+WEBHOOK_SECRET = "my-secret"
+
+@app.post("/hook")
+async def handle_webhook(request: Request):
+    body = await request.body()
+    signature_header = request.headers.get("X-Webhook-Signature", "")
+
+    if not signature_header.startswith("sha256="):
+        raise HTTPException(status_code=400, detail="Missing signature")
+
+    received_sig = signature_header.removeprefix("sha256=")
+    expected_sig = hmac.new(
+        WEBHOOK_SECRET.encode(), body, hashlib.sha256
+    ).hexdigest()
+
+    if not hmac.compare_digest(received_sig, expected_sig):
+        raise HTTPException(status_code=403, detail="Invalid signature")
+
+    import json
+    payload = json.loads(body)
+    print(f"Received event: {payload['event']}")
+    return {"ok": True}
+```
+
+### Node.js verification example
+
+```javascript
+const crypto = require("crypto");
+const express = require("express");
+const app = express();
+
+const WEBHOOK_SECRET = "my-secret";
+
+app.post("/hook", express.raw({ type: "application/json" }), (req, res) => {
+  const signatureHeader = req.headers["x-webhook-signature"] || "";
+  if (!signatureHeader.startsWith("sha256=")) {
+    return res.status(400).json({ error: "Missing signature" });
+  }
+
+  const receivedSig = signatureHeader.slice("sha256=".length);
+  const expectedSig = crypto
+    .createHmac("sha256", WEBHOOK_SECRET)
+    .update(req.body)
+    .digest("hex");
+
+  if (!crypto.timingSafeEqual(Buffer.from(receivedSig), Buffer.from(expectedSig))) {
+    return res.status(403).json({ error: "Invalid signature" });
+  }
+
+  const payload = JSON.parse(req.body);
+  console.log(`Received event: ${payload.event}`);
+  res.json({ ok: true });
+});
+
+app.listen(5000, () => console.log("Listening on :5000"));
+```
+
+### curl testing example
+
+```bash
+# Compute the signature manually
+BODY='{"event":"data.updated","timestamp":"2026-03-06T12:00:00+00:00","data":{"state_fips":"27"}}'
+SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "my-secret" | awk '{print $2}')
+
+# Send a test webhook delivery
+curl -X POST http://localhost:5000/hook \
+  -H "Content-Type: application/json" \
+  -H "X-Webhook-Signature: sha256=$SIG" \
+  -d "$BODY"
+```
+
+## Webhook Retry Behavior
+
+- Deliveries that receive a 5xx response or a network error are retried.
+- Retry schedule: exponential backoff (1s, 2s, 4s) up to 3 attempts.
+- 4xx responses are **not** retried (indicates a problem with your endpoint).
+- Delivery timeout: 10 seconds.
+
+## Testing Webhooks Locally
+
+Use a tunnel service like [ngrok](https://ngrok.com) to expose your local server:
+
+```bash
+# 1. Start your local webhook handler
+python -m uvicorn my_app:app --port 5000
+
+# 2. Expose it via ngrok
+ngrok http 5000
+
+# 3. Create a subscription using the ngrok URL
+curl -X POST -H "X-API-Key: your-key" -H "Content-Type: application/json" \
+  -d '{"url":"https://abc123.ngrok.io/hook","events":["data.updated"],"secret":"my-secret"}' \
+  "https://geohealth-api-production.up.railway.app/v1/webhooks"
+
+# 4. Trigger a data.updated event (e.g., run an ETL load)
+#    and inspect the request in your local server logs
+```
 
 ---
 
@@ -343,7 +742,7 @@ Returns structured metadata about every field, grouped by category. Includes dat
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `category` | string | No | Filter by category: `demographics`, `vulnerability`, `health_outcomes`, or `composite` |
+| `category` | string | No | Filter by category: `demographics`, `vulnerability`, `health_outcomes`, `environmental`, `composite`, or `identity` |
 
 ### Example
 
@@ -399,9 +798,15 @@ curl -H "X-API-Key: your-key" \
 
 ```json
 {
-  "total_tracts": 1505,
+  "total_states": 4,
+  "total_tracts": 6784,
+  "offset": 0,
+  "limit": 50,
   "states": [
-    { "state_fips": "27", "state_name": "Minnesota", "tract_count": 1505 }
+    { "state_fips": "13", "tract_count": 1985 },
+    { "state_fips": "20", "tract_count": 770 },
+    { "state_fips": "27", "tract_count": 1505 },
+    { "state_fips": "29", "tract_count": 1524 }
   ]
 }
 ```
@@ -500,10 +905,15 @@ curl https://geohealth-api-production.up.railway.app/health
   "status": "ok",
   "database": "connected",
   "detail": null,
-  "cache_size": 128,
-  "cache_hit_rate": 0.85,
-  "rate_limiter_active_keys": 3,
-  "uptime_seconds": 86400
+  "cache": {
+    "size": 128,
+    "max_size": 1024,
+    "hit_rate": 0.85
+  },
+  "rate_limiter": {
+    "active_keys": 3
+  },
+  "uptime_seconds": 86400.0
 }
 ```
 

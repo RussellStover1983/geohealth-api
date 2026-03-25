@@ -12,6 +12,7 @@ const UPSTREAM =
 
 const ALLOWED_PREFIXES = [
   "/api/v1/market-fit",
+  "/api/v1/providers",
   "/health",
 ];
 

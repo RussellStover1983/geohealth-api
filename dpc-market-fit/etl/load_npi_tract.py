@@ -6,6 +6,9 @@ to census tracts using the HUD USPS ZIP-to-Tract crosswalk, and
 produces a pre-computed npi_tract_counts.csv with tract-level PCP
 and facility counts.
 
+Also outputs per-state individual provider CSVs (providers_XX.csv)
+for map-based provider plotting with practice location coordinates.
+
 Usage:
     python -m etl.load_npi_tract --nppes-zip /path/to/NPPES_Data_*.zip \
         --hud-crosswalk /path/to/ZIP_TRACT_*.xlsx
@@ -17,21 +20,115 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import io
 import logging
 import os
+import struct
 import tempfile
 import zipfile
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # Output path
 _OUTPUT_PATH = Path(__file__).parent.parent / "app" / "data" / "npi_tract_counts.csv"
+_PROVIDERS_DIR = Path(__file__).parent.parent / "app" / "data"
 
 # Load taxonomy codes from config
 _TAXONOMY_CONFIG_PATH = Path(__file__).parent.parent / "app" / "data" / "npi_taxonomy_config.json"
+
+# ZCTA Gazetteer for ZIP-to-centroid geocoding
+_ZCTA_GAZETTEER_PATH = Path(__file__).parent / "data" / "2020_Gaz_zcta5_national.txt"
+
+# Facility column name -> provider_type for individual records
+_COLUMN_TO_PROVIDER_TYPE: dict[str, str] = {
+    "fqhc_count": "FQHC",
+    "urgent_care_count": "URGENT_CARE",
+    "rural_health_clinic_count": "RURAL_HEALTH",
+    "primary_care_clinic_count": "PRIMARY_CARE_CLINIC",
+    "community_health_center_count": "COMMUNITY_HEALTH_CENTER",
+}
+
+# State FIPS -> 2-letter abbreviation for output filenames
+_STATE_FIPS_TO_ABBR: dict[str, str] = {
+    "01": "AL", "02": "AK", "04": "AZ", "05": "AR", "06": "CA",
+    "08": "CO", "09": "CT", "10": "DE", "11": "DC", "12": "FL",
+    "13": "GA", "15": "HI", "16": "ID", "17": "IL", "18": "IN",
+    "19": "IA", "20": "KS", "21": "KY", "22": "LA", "23": "ME",
+    "24": "MD", "25": "MA", "26": "MI", "27": "MN", "28": "MS",
+    "29": "MO", "30": "MT", "31": "NE", "32": "NV", "33": "NH",
+    "34": "NJ", "35": "NM", "36": "NY", "37": "NC", "38": "ND",
+    "39": "OH", "40": "OK", "41": "OR", "42": "PA", "44": "RI",
+    "45": "SC", "46": "SD", "47": "TN", "48": "TX", "49": "UT",
+    "50": "VT", "51": "VA", "53": "WA", "54": "WV", "55": "WI",
+    "56": "WY",
+}
+
+
+@dataclass
+class ProviderRecord:
+    """Individual provider record for map plotting."""
+
+    npi: str
+    name: str
+    credential: str
+    taxonomy_code: str
+    provider_type: str
+    address: str
+    city: str
+    state: str
+    zip_code: str
+    lat: float
+    lon: float
+    tract_fips: str
+
+
+def load_zcta_gazetteer(
+    gazetteer_path: str | Path | None = None,
+) -> dict[str, tuple[float, float]]:
+    """Load ZCTA Gazetteer file: ZIP -> (lat, lon) centroid.
+
+    The gazetteer is a tab-separated file from Census Bureau with columns:
+    GEOID, ALAND, AWATER, ALAND_SQMI, AWATER_SQMI, INTPTLAT, INTPTLONG
+    """
+    path = Path(gazetteer_path) if gazetteer_path else _ZCTA_GAZETTEER_PATH
+    centroids: dict[str, tuple[float, float]] = {}
+
+    if not path.exists():
+        logger.warning("ZCTA gazetteer not found at %s", path)
+        return centroids
+
+    with open(path, encoding="utf-8") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for row in reader:
+            zcta = row.get("GEOID", "").strip()
+            if not zcta:
+                continue
+            try:
+                lat = float(row.get("INTPTLAT", "").strip())
+                lon = float(row.get("INTPTLONG", "").strip())
+                centroids[zcta] = (lat, lon)
+            except (ValueError, TypeError):
+                continue
+
+    logger.info("Loaded %d ZCTA centroids from gazetteer", len(centroids))
+    return centroids
+
+
+def _jitter_coords(
+    lat: float, lon: float, npi: str, max_offset: float = 0.002
+) -> tuple[float, float]:
+    """Apply deterministic hash-based jitter (~200m) using NPI as seed."""
+    digest = hashlib.md5(npi.encode()).digest()  # noqa: S324
+    # Extract two floats from the hash (deterministic per NPI)
+    raw_x, raw_y = struct.unpack("<HH", digest[:4])
+    # Normalize to [-max_offset, +max_offset]
+    jitter_lat = (raw_x / 65535.0 - 0.5) * 2 * max_offset
+    jitter_lon = (raw_y / 65535.0 - 0.5) * 2 * max_offset
+    return lat + jitter_lat, lon + jitter_lon
 
 
 def _load_taxonomy_sets() -> tuple[set[str], dict[str, str]]:
@@ -231,6 +328,53 @@ def _is_active(row: dict) -> bool:
     return not row.get("NPI Deactivation Reason Code", "").strip()
 
 
+def _extract_provider_record(
+    row: dict,
+    entity_type: str,
+    taxonomy_code: str,
+    provider_type: str,
+    practice_zip: str,
+    tract_fips: str,
+) -> ProviderRecord:
+    """Build a ProviderRecord from an NPPES row."""
+    npi = row.get("NPI", "").strip()
+
+    if entity_type == "1":
+        first = row.get("Provider First Name", "").strip()
+        last = row.get("Provider Last Name (Legal Name)", "").strip()
+        name = f"{first} {last}".strip()
+    else:
+        name = row.get(
+            "Provider Organization Name (Legal Business Name)", ""
+        ).strip()
+
+    credential = row.get("Provider Credential Text", "").strip()
+    street = row.get(
+        "Provider Business Practice Location Address First Line", ""
+    ).strip()
+    city = row.get(
+        "Provider Business Practice Location Address City Name", ""
+    ).strip()
+    state = row.get(
+        "Provider Business Practice Location Address State Name", ""
+    ).strip()
+
+    return ProviderRecord(
+        npi=npi,
+        name=name,
+        credential=credential,
+        taxonomy_code=taxonomy_code,
+        provider_type=provider_type,
+        address=street,
+        city=city,
+        state=state,
+        zip_code=practice_zip,
+        lat=0.0,  # Filled in later via gazetteer
+        lon=0.0,
+        tract_fips=tract_fips,
+    )
+
+
 def process_nppes_stream(
     nppes_reader: csv.DictReader,
     crosswalk: dict[str, list[tuple[str, float]]],
@@ -238,7 +382,8 @@ def process_nppes_stream(
     facility_code_to_column: dict[str, str],
     *,
     state_filter: set[str] | None = None,
-) -> dict[str, dict[str, float]]:
+    collect_providers: bool = False,
+) -> tuple[dict[str, dict[str, float]], list[ProviderRecord]]:
     """Stream-process NPPES CSV rows and allocate to tracts.
 
     Args:
@@ -247,9 +392,11 @@ def process_nppes_stream(
         pcp_codes: Set of tier1+tier2 PCP taxonomy codes
         facility_code_to_column: Facility code -> column name mapping
         state_filter: Optional set of 2-letter state codes to include
+        collect_providers: If True, also collect individual ProviderRecords
 
     Returns:
-        Dict of tract_fips -> {pcp_count, fqhc_count, ...}
+        Tuple of (tract_counts dict, list of ProviderRecords).
+        When collect_providers is False, the list is empty.
     """
     all_facility_codes = set(facility_code_to_column.keys())
     tract_counts: dict[str, dict[str, float]] = defaultdict(
@@ -262,6 +409,7 @@ def process_nppes_stream(
             "community_health_center_count": 0.0,
         }
     )
+    providers: list[ProviderRecord] = []
 
     processed = 0
     matched = 0
@@ -300,12 +448,14 @@ def process_nppes_stream(
         # Determine what this provider counts as
         is_pcp = False
         facility_columns: list[str] = []
+        primary_taxonomy = taxonomy_codes[0]
 
         if entity_type == "1":
             # Individual provider — check PCP taxonomy
             for code in taxonomy_codes:
                 if code in pcp_codes:
                     is_pcp = True
+                    primary_taxonomy = code
                     break
         elif entity_type == "2":
             # Organization — check facility codes
@@ -314,6 +464,8 @@ def process_nppes_stream(
                     col = facility_code_to_column[code]
                     if col not in facility_columns:
                         facility_columns.append(col)
+                    if primary_taxonomy == taxonomy_codes[0]:
+                        primary_taxonomy = code
 
         if not is_pcp and not facility_columns:
             continue
@@ -339,14 +491,32 @@ def process_nppes_stream(
             for col in facility_columns:
                 tract_counts[tract_fips][col] += ratio
 
+        # Collect individual provider record (assign to highest-ratio tract)
+        if collect_providers:
+            best_tract = max(tracts, key=lambda t: t[1])[0]
+            if is_pcp:
+                ptype = "PCP"
+            elif facility_columns:
+                ptype = _COLUMN_TO_PROVIDER_TYPE.get(facility_columns[0], "PCP")
+            else:
+                ptype = "PCP"
+            providers.append(
+                _extract_provider_record(
+                    row, entity_type, primary_taxonomy, ptype,
+                    practice_zip, best_tract,
+                )
+            )
+
     logger.info(
         "NPPES processing complete: %d rows processed, %d matched, "
         "%d inactive, %d no ZIP, %d no crosswalk match",
         processed, matched, skipped_inactive, skipped_no_zip,
         skipped_no_crosswalk,
     )
+    if collect_providers:
+        logger.info("Collected %d individual provider records", len(providers))
 
-    return dict(tract_counts)
+    return dict(tract_counts), providers
 
 
 def write_output_csv(
@@ -395,6 +565,79 @@ def write_output_csv(
     logger.info(
         "Wrote %d tract rows to %s", len(tract_counts), output_path
     )
+
+
+def geocode_providers(
+    providers: list[ProviderRecord],
+    gazetteer_path: str | Path | None = None,
+) -> list[ProviderRecord]:
+    """Assign lat/lon to providers using ZCTA gazetteer centroids + jitter."""
+    centroids = load_zcta_gazetteer(gazetteer_path)
+    geocoded = 0
+    for p in providers:
+        centroid = centroids.get(p.zip_code)
+        if centroid:
+            p.lat, p.lon = _jitter_coords(centroid[0], centroid[1], p.npi)
+            geocoded += 1
+    logger.info(
+        "Geocoded %d/%d providers via ZCTA gazetteer",
+        geocoded, len(providers),
+    )
+    return [p for p in providers if p.lat != 0.0 and p.lon != 0.0]
+
+
+def write_providers_csv(
+    providers: list[ProviderRecord],
+    output_dir: Path | str | None = None,
+) -> list[Path]:
+    """Write per-state provider detail CSVs.
+
+    Groups providers by the first 2 digits of tract_fips (state FIPS),
+    writes one CSV per state: providers_XX.csv where XX is the state abbreviation.
+    """
+    output_dir = Path(output_dir) if output_dir else _PROVIDERS_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    by_state: dict[str, list[ProviderRecord]] = defaultdict(list)
+    for p in providers:
+        state_fips = p.tract_fips[:2]
+        by_state[state_fips].append(p)
+
+    fieldnames = [
+        "npi", "name", "credential", "taxonomy_code", "provider_type",
+        "address", "city", "state", "zip", "lat", "lon", "tract_fips",
+    ]
+
+    written_paths: list[Path] = []
+    for state_fips, state_providers in sorted(by_state.items()):
+        abbr = _STATE_FIPS_TO_ABBR.get(state_fips, state_fips)
+        out_path = output_dir / f"providers_{abbr}.csv"
+
+        with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for p in state_providers:
+                writer.writerow({
+                    "npi": p.npi,
+                    "name": p.name,
+                    "credential": p.credential,
+                    "taxonomy_code": p.taxonomy_code,
+                    "provider_type": p.provider_type,
+                    "address": p.address,
+                    "city": p.city,
+                    "state": p.state,
+                    "zip": p.zip_code,
+                    "lat": round(p.lat, 6),
+                    "lon": round(p.lon, 6),
+                    "tract_fips": p.tract_fips,
+                })
+
+        logger.info(
+            "Wrote %d providers to %s", len(state_providers), out_path
+        )
+        written_paths.append(out_path)
+
+    return written_paths
 
 
 def download_nppes_zip(dest_dir: str) -> str:
@@ -461,6 +704,9 @@ def run_etl(
     hud_crosswalk_path: str,
     output_path: str | None = None,
     state_filter: set[str] | None = None,
+    *,
+    collect_providers: bool = True,
+    gazetteer_path: str | None = None,
 ) -> Path:
     """Run the full ETL pipeline.
 
@@ -469,6 +715,8 @@ def run_etl(
         hud_crosswalk_path: Path to HUD crosswalk (.xlsx or .csv)
         output_path: Output CSV path (defaults to app/data/npi_tract_counts.csv)
         state_filter: Optional set of 2-letter state codes to include
+        collect_providers: If True, also output per-state provider CSVs
+        gazetteer_path: Optional path to ZCTA gazetteer for geocoding
 
     Returns:
         Path to the output CSV file.
@@ -511,16 +759,23 @@ def run_etl(
             text_stream = io.TextIOWrapper(raw, encoding="utf-8", errors="replace")
             reader = csv.DictReader(text_stream)
 
-            tract_counts = process_nppes_stream(
+            tract_counts, providers = process_nppes_stream(
                 reader,
                 crosswalk,
                 pcp_codes,
                 facility_code_to_column,
                 state_filter=state_filter,
+                collect_providers=collect_providers,
             )
 
-    # Write output
+    # Write tract-level output
     write_output_csv(tract_counts, out)
+
+    # Write per-state provider CSVs
+    if collect_providers and providers:
+        providers = geocode_providers(providers, gazetteer_path)
+        write_providers_csv(providers)
+
     return out
 
 

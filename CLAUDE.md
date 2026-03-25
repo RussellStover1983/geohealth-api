@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 ## Autonomy
 
 You have FULL autonomy to complete tasks end-to-end without stopping to ask for permission. Specifically:
@@ -32,7 +34,7 @@ uvicorn geohealth.api.main:app --reload
 docker compose up --build
 
 # Tests — no live DB required, everything is mocked
-pytest                             # All 192 tests
+pytest                             # All tests (~197)
 pytest tests/test_context.py -v    # Single module
 pytest -k test_auth                # Pattern match
 
@@ -68,6 +70,13 @@ cd geohealth-ui
 pnpm install                      # Install deps
 pnpm dev                          # Dev server on localhost:3000
 pnpm build                        # Production build (verify before push)
+
+# DPC Market Fit API (dpc-market-fit/) — separate FastAPI app
+cd dpc-market-fit
+pip install -r requirements.txt
+uvicorn app.main:app --port 8001 --reload     # Dev server
+python -m pytest                               # All DPC tests (~75)
+python -m pytest tests/test_scoring.py -v      # Single module
 ```
 
 ## Frontend (`geohealth-ui/`)
@@ -88,6 +97,35 @@ pnpm build                        # Production build (verify before push)
 | `lib/map/styles.ts` | Choropleth color scales and metric configs |
 | `app/api/autocomplete/route.ts` | Server-side Nominatim proxy for address suggestions |
 | `app/api/geohealth/[...path]/route.ts` | API proxy to backend (avoids CORS) |
+
+## DPC Market Fit API (`dpc-market-fit/`)
+
+Standalone FastAPI app evaluating geographic viability for Direct Primary Care practices. **Not** part of the main `geohealth` package — has its own `requirements.txt`, `Dockerfile`, and test suite.
+
+**Scoring dimensions** (each 0-100): Demand, Affordability, Supply Gap, Employer, Competition
+**Data sources**: Census ACS, CDC PLACES, CDC SVI, NPPES NPI, HRSA HPSA, Census CBP
+**States loaded**: GA, KS, MN, MO (same as main API)
+
+| Path | Description |
+|------|-------------|
+| `app/main.py` | FastAPI entry point with routers for each dimension + composite score |
+| `app/services/scoring.py` | Scoring engine — all 5 dimensions with data completeness tracking |
+| `app/services/geocoder.py` | Census Bureau geocoder (shared pattern with main API) |
+| `app/routers/` | Endpoint modules: `demand`, `supply`, `employer`, `competition`, `market_fit`, `providers` |
+| `app/data/` | CSV data files (NPI tract counts, provider lookups per state) |
+| `tests/` | All mocked, run with `cd dpc-market-fit && python -m pytest` |
+
+**Deployment**: Railway service `dpc-market-fit`, deployed via `railway up --service dpc-market-fit --path-as-root dpc-market-fit`
+**Live**: `https://dpc-market-fit-production.up.railway.app`
+**Frontend integration**: Proxy at `geohealth-ui/app/api/dpc/[...path]/route.ts`, hook `useMarketFit()` in `lib/api/hooks.ts`, types at bottom of `lib/api/types.ts`
+
+## Data Dependencies
+
+- **NPPES NPI registry**: `C:\dev\shared\data\nppes\raw\npidata_pfile_*.csv` — used by dpc-market-fit ETL for provider tract counts
+- **NPPES derived files**: `C:\dev\shared\data\nppes\derived\providers_XX.csv`, `npi_tract_counts.csv` — pre-computed by `shared/scripts/extract_state_providers.py`
+- **HRSA HPSA**: `C:\dev\shared\data\hrsa\hpsa_primary_care.csv` — used by dpc-market-fit for supply gap scoring
+- **CDC SVI/PLACES**: fetched via APIs, cached in PostGIS
+- **Census TIGER/ACS**: fetched via APIs, loaded into PostGIS by ETL loaders
 
 ## Rules (enforce automatically — never ask)
 
@@ -130,6 +168,12 @@ pnpm build                        # Production build (verify before push)
 5. Update `docs/data-dictionary.md` with field definitions
 6. Run `pytest` — fix any failures
 
+**DPC Market Fit changes:**
+1. Make changes in `dpc-market-fit/`
+2. Run `cd dpc-market-fit && python -m pytest` — fix any failures
+3. DPC uses the same `from __future__ import annotations` rule as main API
+4. If response shapes changed, update `geohealth-ui/lib/api/types.ts` (DPC types at bottom)
+
 **Frontend changes:**
 1. Make the change in `geohealth-ui/`
 2. Run `pnpm build` to verify — fix any errors
@@ -154,8 +198,8 @@ pnpm build                        # Production build (verify before push)
 
 A task is NOT complete until ALL of these pass:
 1. The code works (tested manually or via pytest)
-2. All existing tests still pass (`pytest`)
+2. All existing tests still pass (`pytest` for main API, `cd dpc-market-fit && python -m pytest` for DPC)
 3. Lint is clean (`ruff check geohealth/ tests/`)
 4. If frontend was touched: `pnpm build` succeeds
 5. Any new public API endpoint has tests
-6. Any new/changed endpoint is documented in `docs/api-reference.md`
+6. Any new/changed main API endpoint is documented in `docs/api-reference.md`

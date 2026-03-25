@@ -22,7 +22,9 @@ _HPSA_DATASET_ID = "ufpc-ankf"
 _HPSA_BASE_URL = f"https://data.hrsa.gov/resource/{_HPSA_DATASET_ID}.json"
 
 # Embedded CSV path
-_HPSA_CSV_PATH = Path(__file__).parent.parent / "data" / "hpsa_primary_care.csv"
+_SHARED_HRSA = Path(__file__).resolve().parent.parent.parent.parent.parent / "shared" / "data" / "hrsa"
+_LOCAL_DATA = Path(__file__).parent.parent / "data"
+_HPSA_CSV_PATH = (_SHARED_HRSA if _SHARED_HRSA.exists() else _LOCAL_DATA) / "hpsa_primary_care.csv"
 
 # In-memory index: county_fips (5-digit) → list of HPSA rows
 _HPSA_INDEX: dict[str, list[dict]] | None = None
