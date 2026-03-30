@@ -9,6 +9,7 @@ import type {
   DemographicCompareResponse,
   DictionaryResponse,
   MarketFitResponse,
+  ProvidersResponse,
 } from "./types";
 
 interface AsyncState<T> {
@@ -285,7 +286,7 @@ export function useMarketFit(geoid: string | null) {
 }
 
 export function useProviders(tractFips: string | null, enabled: boolean) {
-  const [state, setState] = useState<AsyncState<GeoJSON.FeatureCollection>>({
+  const [state, setState] = useState<AsyncState<ProvidersResponse>>({
     data: null,
     error: null,
     isLoading: false,

@@ -310,8 +310,8 @@ export default function MethodologyPage() {
             <CardContent className="pt-6">
               <ul className="space-y-2 text-xs leading-relaxed text-stone-600 list-disc list-inside">
                 <li>
-                  <strong>Geographic coverage:</strong> Currently limited to 4 states (GA, KS, MN, MO)
-                  covering 6,784 census tracts. National coverage is planned.
+                  <strong>Geographic coverage:</strong> All 50 US states + DC are loaded, covering
+                  ~84,000 census tracts. US territories are not yet included.
                 </li>
                 <li>
                   <strong>Temporal lag:</strong> ACS 5-year estimates represent 2018–2022 averages.

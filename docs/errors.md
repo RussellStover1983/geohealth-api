@@ -74,7 +74,7 @@ curl -H "X-API-Key: your-key" \
 | `"No census tract found for this location"` | GET /v1/context | Location is outside loaded states |
 | `"Webhook not found."` | DELETE /v1/webhooks/{id} | Webhook ID does not exist or belongs to another key |
 
-**Fix:** Check which states have data loaded via `GET /v1/stats`. Currently loaded: GA (13), KS (20), MN (27), MO (29).
+**Fix:** Check which states have data loaded via `GET /v1/stats`. All 50 US states + DC are currently loaded.
 
 ### 422 Validation Error
 

@@ -279,9 +279,6 @@ export function TractDetailPanel() {
                   <NarrativePanel narrative={selectedNarrative} />
                 )}
 
-                {/* DPC Market Fit Score */}
-                <DpcMarketFitCard geoid={selectedTract.geoid} />
-
                 {/* Demographics */}
                 <DemographicsCard tract={selectedTract} />
 
@@ -328,6 +325,9 @@ export function TractDetailPanel() {
 
                 {/* Trends */}
                 <TrendsCard geoid={selectedTract.geoid} />
+
+                {/* DPC Market Fit Score */}
+                <DpcMarketFitCard geoid={selectedTract.geoid} />
 
                 {/* Comparison toggle */}
                 <Separator />

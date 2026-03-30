@@ -245,7 +245,7 @@ For preventive measures (routine checkups, dental visits), the comparison is inv
 
 ## Limitations
 
-- **Geographic coverage:** Currently limited to 4 states (GA, KS, MN, MO) covering 6,784 census tracts. National coverage is planned.
+- **Geographic coverage:** All 50 US states + DC are loaded, covering ~84,000 census tracts. US territories are not yet included.
 - **Temporal lag:** ACS 5-year estimates represent 2018–2022 averages. Rapid demographic shifts may not yet be reflected.
 - **Model-based estimates:** CDC PLACES health measures are modeled from BRFSS survey data, not direct measurements.
 - **DPC scoring is exploratory:** The market fit model uses heuristic weights and national reference ranges. It is intended for screening, not as a definitive business assessment.

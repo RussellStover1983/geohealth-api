@@ -20,7 +20,7 @@ Census-tract-level geographic health intelligence API + interactive frontend exp
 **Stack**: Python 3.11+ / FastAPI / PostgreSQL 16 + PostGIS 3.4 / SQLAlchemy 2.0 async / Pydantic v2
 **Frontend**: Next.js 14 / TypeScript / Tailwind CSS / MapLibre GL / Zustand — deployed on Vercel
 **Live**: API `https://geohealth-api-production.up.railway.app` | Frontend `https://geohealth-api.vercel.app` | Docs `https://russellstover1983.github.io/geohealth-api/` | PyPI `pip install geohealth-api`
-**Data**: GA (13), KS (20), MN (27), MO (29) — 6,784 census tracts. ETL supports all 50 states + DC.
+**Data**: All 50 US states + DC — ~84,000 census tracts.
 
 For detailed architecture, endpoint tables, file listings, and deployment config, see `ARCHITECTURE.md`.
 
@@ -104,7 +104,7 @@ Standalone FastAPI app evaluating geographic viability for Direct Primary Care p
 
 **Scoring dimensions** (each 0-100): Demand, Affordability, Supply Gap, Employer, Competition
 **Data sources**: Census ACS, CDC PLACES, CDC SVI, NPPES NPI, HRSA HPSA, Census CBP
-**States loaded**: GA, KS, MN, MO (same as main API)
+**States loaded**: DPC provider data for GA, KS, MN, MO. Main API has all 50 states + DC.
 
 | Path | Description |
 |------|-------------|

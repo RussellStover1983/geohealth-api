@@ -37,9 +37,7 @@ A **census-tract-level geographic health intelligence platform**. Given a street
 
 ## Data Coverage
 
-**4 US states loaded** (6,784 census tracts): Georgia (13), Kansas (20), Minnesota (27), Missouri (29)
-
-The ETL pipeline supports loading any/all 50 US states + DC. Each tract has **50+ individual metrics** from 7 data sources.
+**All 50 US states + DC loaded** (~84,000 census tracts). Each tract has **50+ individual metrics** from 7 data sources.
 
 ---
 

@@ -798,15 +798,15 @@ curl -H "X-API-Key: your-key" \
 
 ```json
 {
-  "total_states": 4,
-  "total_tracts": 6784,
+  "total_states": 51,
+  "total_tracts": 84415,
   "offset": 0,
   "limit": 50,
   "states": [
-    { "state_fips": "13", "tract_count": 1985 },
-    { "state_fips": "20", "tract_count": 770 },
-    { "state_fips": "27", "tract_count": 1505 },
-    { "state_fips": "29", "tract_count": 1524 }
+    { "state_fips": "01", "tract_count": 1437 },
+    { "state_fips": "02", "tract_count": 177 },
+    { "state_fips": "04", "tract_count": 1765 },
+    "... all 50 states + DC ..."
   ]
 }
 ```

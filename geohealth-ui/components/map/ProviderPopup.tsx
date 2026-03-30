@@ -2,7 +2,6 @@
 
 import { Popup } from "react-map-gl/maplibre";
 import { useGeoHealthStore } from "@/lib/store";
-import type { ProviderProperties } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 const TAXONOMY_LABELS: Record<string, string> = {
@@ -37,21 +36,23 @@ const TYPE_STYLES: Record<string, { bg: string; text: string; label: string }> =
   COMMUNITY_HEALTH_CENTER: { bg: "bg-purple-100", text: "text-purple-800", label: "Community Health" },
 };
 
-interface ProviderPopupProps {
-  provider: ProviderProperties;
-  longitude: number;
-  latitude: number;
-}
+export function ProviderPopup() {
+  const { selectedProvider, setSelectedProvider } = useGeoHealthStore();
 
-export function ProviderPopup({ provider, longitude, latitude }: ProviderPopupProps) {
-  const { setSelectedProvider } = useGeoHealthStore();
-  const typeStyle = TYPE_STYLES[provider.provider_type] ?? TYPE_STYLES.PCP;
-  const taxonomyLabel = TAXONOMY_LABELS[provider.taxonomy_code] ?? provider.taxonomy_code;
+  if (!selectedProvider || !selectedProvider.lng || !selectedProvider.lat) {
+    return null;
+  }
+
+  const typeStyle = TYPE_STYLES[selectedProvider.provider_type] ?? TYPE_STYLES.PCP;
+  const taxonomyLabel =
+    TAXONOMY_LABELS[selectedProvider.primary_taxonomy] ??
+    selectedProvider.taxonomy_description ??
+    selectedProvider.primary_taxonomy;
 
   return (
     <Popup
-      longitude={longitude}
-      latitude={latitude}
+      longitude={selectedProvider.lng}
+      latitude={selectedProvider.lat}
       anchor="bottom"
       closeOnClick={false}
       onClose={() => setSelectedProvider(null)}
@@ -61,7 +62,7 @@ export function ProviderPopup({ provider, longitude, latitude }: ProviderPopupPr
       <div className="px-1 py-0.5">
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-sm font-semibold text-stone-900 leading-tight">
-            {provider.name}
+            {selectedProvider.provider_name}
           </h3>
         </div>
 
@@ -78,12 +79,16 @@ export function ProviderPopup({ provider, longitude, latitude }: ProviderPopupPr
           <span className="text-[10px] text-stone-500">{taxonomyLabel}</span>
         </div>
 
-        <p className="mt-1.5 text-xs text-stone-600 leading-snug">
-          {provider.address}
-        </p>
+        {selectedProvider.practice_address && (
+          <p className="mt-1.5 text-xs text-stone-600 leading-snug">
+            {selectedProvider.practice_address}
+            {selectedProvider.practice_city && `, ${selectedProvider.practice_city}`}
+            {selectedProvider.practice_state && `, ${selectedProvider.practice_state}`}
+          </p>
+        )}
 
         <p className="mt-1 text-[10px] text-stone-400">
-          NPI: {provider.npi}
+          NPI: {selectedProvider.npi}
         </p>
       </div>
     </Popup>
