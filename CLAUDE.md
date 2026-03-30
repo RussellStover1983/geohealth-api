@@ -34,7 +34,7 @@ uvicorn geohealth.api.main:app --reload
 docker compose up --build
 
 # Tests — no live DB required, everything is mocked
-pytest                             # All tests (~197)
+pytest                             # All tests (~206)
 pytest tests/test_context.py -v    # Single module
 pytest -k test_auth                # Pattern match
 
@@ -75,7 +75,7 @@ pnpm build                        # Production build (verify before push)
 cd dpc-market-fit
 pip install -r requirements.txt
 uvicorn app.main:app --port 8001 --reload     # Dev server
-python -m pytest                               # All DPC tests (~75)
+python -m pytest                               # All DPC tests (~137)
 python -m pytest tests/test_scoring.py -v      # Single module
 ```
 
