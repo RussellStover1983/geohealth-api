@@ -22,7 +22,7 @@ Census-tract-level geographic health intelligence API + interactive frontend exp
 **Live**: API `https://geohealth-api-production.up.railway.app` | Frontend `https://geohealth-api.vercel.app` | Docs `https://russellstover1983.github.io/geohealth-api/` | PyPI `pip install geohealth-api`
 **Data**: All 50 US states + DC — ~84,000 census tracts.
 
-For detailed architecture, endpoint tables, file listings, and deployment config, see `ARCHITECTURE.md`.
+For detailed architecture, endpoint tables, file listings, and deployment config, see `ARCHITECTURE.md`. **Read it before making structural changes** — it documents the request flow, JSONB data source pattern, caching, rate limiting, geocoder fallback chain, and MCP server design.
 
 ## Commands
 
@@ -40,11 +40,15 @@ pytest -k test_auth                # Pattern match
 
 # Linting
 ruff check geohealth/ tests/      # line-length=99, target py311
+ruff check --fix geohealth/ tests/ # Auto-fix safe lint issues
 
 # Install
 pip install -e ".[dev]"           # Core + test deps
 pip install -e ".[dev,etl]"       # Include ETL deps (geopandas, shapely, etc.)
-pip install -e ".[mcp]"          # MCP server for Claude agents
+pip install -e ".[mcp]"           # MCP server for Claude agents
+
+# MCP server (after installing the [mcp] extra)
+python -m geohealth.mcp           # Stdio MCP server — entry point is geohealth/mcp/__main__.py
 
 # Data loading
 python -m geohealth.etl.load_all --state 27         # Single state
@@ -77,6 +81,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --port 8001 --reload     # Dev server
 python -m pytest                               # All DPC tests (~137)
 python -m pytest tests/test_scoring.py -v      # Single module
+ruff check app/ tests/                         # Lint DPC code
 ```
 
 ## Frontend (`geohealth-ui/`)
@@ -138,9 +143,11 @@ Standalone FastAPI app evaluating geographic viability for Direct Primary Care p
 - All settings via pydantic-settings in `config.py`. Never hardcode config values.
 - Ruff: line-length 99, target py311. Fix lint errors yourself after every change.
 - Tests use mocks only — never connect to a real database. Use `unittest.mock` (`AsyncMock`, `MagicMock`, `patch`).
-- `conftest.py` sets `os.environ["RUN_MIGRATIONS"] = "false"` BEFORE any app import. Never move this below the import.
+- `tests/conftest.py` sets `os.environ["RUN_MIGRATIONS"] = "false"` BEFORE any app import. Never move this below the import.
 - New JSONB data sources get their own column on `tract_profiles`. New metrics within an existing source need no migration.
 - `TractDataModel` has `extra = "allow"` — new JSONB fields flow through the API automatically.
+- `geohealth/sdk/` is the public Python client published to PyPI as `geohealth-api`. If you change a public response shape in the main API, mirror it in `sdk/models.py` and bump `version` in `pyproject.toml`.
+- `geohealth/mcp/server.py` exposes API endpoints as MCP tools for Claude agents. If you add a public endpoint that should be agent-callable, register a matching tool there.
 
 ## Workflows (complete all steps — do not stop partway)
 
