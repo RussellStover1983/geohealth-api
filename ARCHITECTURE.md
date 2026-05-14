@@ -156,15 +156,20 @@ Tests use **no live database** — everything is mocked via `unittest.mock` (`As
 
 ## API Endpoints
 
+Authoritative spec lives at `https://geohealth-api-production.up.railway.app/openapi.json`. Mirror anything you add below into the OpenAPI by way of FastAPI route decorators and Pydantic models.
+
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/health` | No | DB connectivity check |
+| GET | `/health` | No | DB connectivity check (includes cache + uptime when healthy) |
 | GET | `/v1/context` | Yes | Primary lookup — address or lat/lng → tract data + optional narrative |
 | POST | `/v1/batch` | Yes | Multi-address lookup (up to `BATCH_MAX_SIZE`) |
 | GET | `/v1/nearby` | Yes | Spatial radius search — tracts within N miles |
 | GET | `/v1/compare` | Yes | Compare two tracts or tract vs county/state/national averages |
 | GET | `/v1/trends` | Yes | Historical trend data — multi-year ACS with change metrics |
 | GET | `/v1/demographics/compare` | Yes | Demographic rankings — tract vs county/state/national with percentiles |
+| GET | `/v1/tracts/geojson` | Yes | GeoJSON FeatureCollection of tract polygons (for map rendering) |
+| GET | `/v1/providers` | Yes | NPI provider lookup |
+| GET | `/v1/providers/geojson` | Yes | GeoJSON FeatureCollection of NPI providers |
 | POST | `/v1/webhooks` | Yes | Create webhook subscription |
 | GET | `/v1/webhooks` | Yes | List webhook subscriptions |
 | GET | `/v1/webhooks/{id}` | Yes | Get webhook subscription details |
@@ -225,7 +230,7 @@ The API deploys to **Railway** (Pro plan, $5/month) using the existing multi-sta
 
 ## Documentation Site (GitHub Pages)
 
-MkDocs + Material theme deployed to GitHub Pages. Five pages: Home, Quick Start, API Reference, Data Dictionary, Python SDK & MCP.
+MkDocs + Material theme deployed to GitHub Pages at `https://russellstover1983.github.io/geohealth-api/`. Seven pages: Home, Quick Start, API Reference, Error Handling, Data Dictionary, Data Sources & Methodology, Python SDK & MCP.
 
 ```
 mkdocs.yml           # Site config (theme, nav, extensions)
@@ -233,7 +238,9 @@ docs/
 ├── index.md         # Landing page — clinical value proposition
 ├── quickstart.md    # First call in 5 minutes
 ├── api-reference.md # All endpoints with parameters, examples, responses
-├── data-dictionary.md # 37 fields with clinical thresholds (including EPA)
+├── errors.md        # Error response shape, status codes, retry guidance
+├── data-dictionary.md # Field definitions with clinical thresholds (including EPA)
+├── methodology.md   # Data sources, provenance, refresh cadence
 └── sdk.md           # Python SDK + MCP server setup
 ```
 

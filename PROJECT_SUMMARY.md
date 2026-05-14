@@ -16,7 +16,7 @@ A **census-tract-level geographic health intelligence platform**. Given a street
 | **API (Railway)** | `https://geohealth-api-production.up.railway.app` |
 | **Swagger UI** | `https://geohealth-api-production.up.railway.app/docs` |
 | **Documentation site** | `https://russellstover1983.github.io/geohealth-api/` |
-| **PyPI package** | `pip install geohealth-api` (v0.1.1) |
+| **PyPI package** | `pip install geohealth-api` (v0.1.0, published 2026-02-25) |
 | **GitHub repo** | `https://github.com/RussellStover1983/geohealth-api` |
 
 ---
@@ -237,12 +237,15 @@ The `/v1/trends` endpoint also computes absolute change and percent change betwe
 
 ## Frontend (`geohealth-ui/`)
 
+**Live**: [https://geohealth-api.vercel.app](https://geohealth-api.vercel.app) — branded "GeoHealth SDOH Explorer", covering 50 states + DC / ~84K tracts.
+
 Interactive SDOH explorer deployed on Vercel. Key features:
 
 - **Choropleth map** — 35+ metric layers, auto-loads tract polygons by visible state
 - **Address autocomplete** — Nominatim-backed with 300ms debounce, keyboard navigation
 - **Tract detail panel** — click any tract to see demographics, SVI radar, health outcomes, EPA data
-- **Layer switcher** — toggle between any available metric for choropleth coloring
+- **Layer switcher** — toggle between SDOH index, ACS demographics, CDC PLACES, EPA, and DPC market-fit layers (Overall, Demand, Affordability, Composite)
+- **NPI provider overlay** — toggle individual NPI providers on the map
 - **Trend sparklines** — inline 2018–2022 trend visualization
 - **AI narrative** — Claude-generated plain-English summary per tract
 
@@ -269,6 +272,9 @@ Interactive SDOH explorer deployed on Vercel. Key features:
 | GET | `/v1/demographics/compare` | Tract vs county/state/national with percentile rankings |
 | GET | `/v1/stats` | Per-state tract counts |
 | GET | `/v1/dictionary` | Field definitions with clinical context |
+| GET | `/v1/tracts/geojson` | GeoJSON FeatureCollection of tract polygons (for map rendering) |
+| GET | `/v1/providers` | NPI provider lookup |
+| GET | `/v1/providers/geojson` | GeoJSON FeatureCollection of NPI providers |
 | POST | `/v1/webhooks` | Create webhook subscription |
 | GET | `/v1/webhooks` | List webhook subscriptions |
 | GET | `/v1/webhooks/{id}` | Get webhook details |

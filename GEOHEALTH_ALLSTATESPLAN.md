@@ -1,5 +1,7 @@
 # GeoHealth API: All 50 States + DC ETL Plan
 
+> **Status: COMPLETE.** All 50 states + DC are loaded in the production Railway PostGIS database. Final count: ~84,000 census tracts across 51 jurisdictions (exceeded the ~74,000 target). The hosted API at `https://geohealth-api-production.up.railway.app` and the frontend at `https://geohealth-api.vercel.app` now serve all 50 states + DC. This document is preserved as a historical record of the rollout plan; phases below describe what was executed, not pending work.
+
 ## Objective
 
 Load census tract data for all 50 US states + DC into the production Railway PostGIS database. Currently 4 states (GA, KS, MN, MO) with 6,784 tracts. Target: ~74,000 tracts across 51 jurisdictions.

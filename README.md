@@ -1,23 +1,56 @@
 # GeoHealth Context API
 
-**[Documentation](https://russellstover1983.github.io/geohealth-api/)** | [PyPI](https://pypi.org/project/geohealth-api/) | [Swagger UI](https://geohealth-api-production.up.railway.app/docs)
+**[Live API](https://geohealth-api-production.up.railway.app)** · **[Interactive Map](https://geohealth-api.vercel.app)** · **[Docs Site](https://russellstover1983.github.io/geohealth-api/)** · **[PyPI](https://pypi.org/project/geohealth-api/)** · **[Swagger UI](https://geohealth-api-production.up.railway.app/docs)**
 
-Census-tract-level geographic health intelligence API. Given a street address or lat/lng coordinates, returns **demographics**, **CDC/ATSDR Social Vulnerability Index (SVI) themes**, **CDC PLACES health outcome measures**, and an optional **AI-generated narrative** for the surrounding census tract.
+Census-tract-level geographic health intelligence API. Given a street address or lat/lng coordinates, returns **demographics**, **CDC/ATSDR Social Vulnerability Index (SVI) themes**, **CDC PLACES health outcome measures**, **EPA EJScreen environmental indicators**, **multi-year trend data**, and an optional **AI-generated narrative** for the surrounding census tract.
+
+**Coverage**: All 50 US states + DC — ~84,000 census tracts.
+
+## Try It Without Installing
+
+The API is live and hosted on Railway. The interactive map is hosted on Vercel.
+
+| What | URL |
+|------|-----|
+| Hosted API | `https://geohealth-api-production.up.railway.app` |
+| Swagger UI | [/docs](https://geohealth-api-production.up.railway.app/docs) |
+| ReDoc | [/redoc](https://geohealth-api-production.up.railway.app/redoc) |
+| OpenAPI JSON | [/openapi.json](https://geohealth-api-production.up.railway.app/openapi.json) |
+| Health check | [/health](https://geohealth-api-production.up.railway.app/health) |
+| Agent overview | [/llms.txt](https://geohealth-api-production.up.railway.app/llms.txt) |
+| Interactive map | [GeoHealth SDOH Explorer](https://geohealth-api.vercel.app) |
+| Documentation | [russellstover1983.github.io/geohealth-api](https://russellstover1983.github.io/geohealth-api/) |
+
+```bash
+# Anonymous health check (no key required)
+curl https://geohealth-api-production.up.railway.app/health
+
+# Hit a data endpoint — auth-protected endpoints require X-API-Key
+curl -H "X-API-Key: $GEOHEALTH_API_KEY" \
+  "https://geohealth-api-production.up.railway.app/v1/context?address=1234+Main+St,+Minneapolis,+MN"
+```
 
 ## Features
 
 - Address and coordinate geocoding (Census Bureau + Nominatim fallback)
 - Census tract resolution via PostGIS spatial queries or FIPS-code lookup
 - ACS demographics: population, income, poverty, insurance, unemployment, age
-- CDC/ATSDR SVI theme percentile rankings (4 themes)
-- CDC PLACES health outcome measures (crude prevalence)
+- CDC/ATSDR SVI theme percentile rankings (4 themes + composite)
+- CDC PLACES health outcome measures (14 measures, crude prevalence)
+- EPA EJScreen environmental indicators (PM2.5, ozone, diesel PM, lead paint, Superfund proximity, etc.)
+- Multi-year ACS trend data (2018–2022) with absolute and percent change
+- Demographic comparison with county/state/national percentile rankings
 - Composite SDOH index
 - AI-generated narrative summaries (Anthropic Claude)
 - Batch address lookups, spatial radius search, tract comparison
+- GeoJSON endpoints for map rendering (tracts and NPI providers)
+- Webhook subscriptions with HMAC-signed delivery and exponential-backoff retry
 - Per-key sliding-window rate limiting with standard headers
 - SHA-256 API key hashing
 
-## Quick Start
+## Run Your Own Instance
+
+If you'd rather run it yourself instead of using the hosted API:
 
 ### 1. Clone and start services
 
@@ -47,19 +80,18 @@ curl http://localhost:8000/health
 # {"status":"ok","database":"connected","detail":null}
 ```
 
-## Interactive API Docs
-
-Once running, explore the full API interactively:
-
-- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-- **OpenAPI JSON**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
+Local Swagger UI / ReDoc / OpenAPI JSON live at `/docs`, `/redoc`, and `/openapi.json` on whatever host you're running. For the hosted equivalents, see the table at the top of this README.
 
 ## Authentication
 
 Most endpoints require an API key via the `X-API-Key` header.
 
 ```bash
+# Against the hosted API
+curl -H "X-API-Key: your-key-here" \
+  "https://geohealth-api-production.up.railway.app/v1/context?address=..."
+
+# Against a local instance
 curl -H "X-API-Key: your-key-here" "http://localhost:8000/v1/context?address=..."
 ```
 
@@ -76,64 +108,87 @@ Keys can be provided as plaintext or as pre-hashed SHA-256 hex strings. The API 
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/health` | No | API and database connectivity check |
+| GET | `/health` | No | API and database connectivity check (includes cache + uptime when healthy) |
 | GET | `/v1/context` | Yes | Primary lookup — address or lat/lng to tract data |
 | POST | `/v1/batch` | Yes | Batch address lookup (up to `BATCH_MAX_SIZE`) |
 | GET | `/v1/nearby` | Yes | Find census tracts within a radius |
-| GET | `/v1/compare` | Yes | Compare two tracts or tract vs. averages |
+| GET | `/v1/compare` | Yes | Compare two tracts or tract vs. county/state/national averages |
+| GET | `/v1/trends` | Yes | Multi-year ACS trends (2018–2022) with change metrics |
+| GET | `/v1/demographics/compare` | Yes | Tract vs county/state/national with percentile rankings |
 | GET | `/v1/dictionary` | Yes | Data dictionary — field definitions with clinical context |
 | GET | `/v1/stats` | Yes | Per-state data loading statistics |
+| GET | `/v1/tracts/geojson` | Yes | GeoJSON FeatureCollection of tract polygons (for map rendering) |
+| GET | `/v1/providers` | Yes | NPI provider lookup |
+| GET | `/v1/providers/geojson` | Yes | GeoJSON FeatureCollection of NPI providers |
+| POST | `/v1/webhooks` | Yes | Create webhook subscription |
+| GET | `/v1/webhooks` | Yes | List webhook subscriptions |
+| GET | `/v1/webhooks/{id}` | Yes | Get webhook subscription details |
+| DELETE | `/v1/webhooks/{id}` | Yes | Delete webhook subscription |
 | GET | `/metrics` | No | Application metrics (counters, latency, cache stats) |
 | GET | `/llms.txt` | No | Agent-readable API overview ([llmstxt.org](https://llmstxt.org)) |
 | GET | `/llms-full.txt` | No | Full agent-readable reference with clinical context |
 
+Full request/response schemas are at [Swagger UI](https://geohealth-api-production.up.railway.app/docs) and the [Documentation site](https://russellstover1983.github.io/geohealth-api/api-reference/).
+
 ## Example Requests
+
+Examples below use the hosted API. Replace the host with `http://localhost:8000` if you're running locally.
+
+```bash
+export GEOHEALTH=https://geohealth-api-production.up.railway.app
+```
 
 ### Context lookup by address
 
 ```bash
-curl -H "X-API-Key: test" \
-  "http://localhost:8000/v1/context?address=1234+Main+St,+Minneapolis,+MN+55401"
+curl -H "X-API-Key: $GEOHEALTH_API_KEY" \
+  "$GEOHEALTH/v1/context?address=1234+Main+St,+Minneapolis,+MN+55401"
 ```
 
 ### Context lookup by coordinates with narrative
 
 ```bash
-curl -H "X-API-Key: test" \
-  "http://localhost:8000/v1/context?lat=44.9778&lng=-93.265&narrative=true"
+curl -H "X-API-Key: $GEOHEALTH_API_KEY" \
+  "$GEOHEALTH/v1/context?lat=44.9778&lng=-93.265&narrative=true"
 ```
 
 ### Batch lookup
 
 ```bash
-curl -X POST -H "X-API-Key: test" -H "Content-Type: application/json" \
+curl -X POST -H "X-API-Key: $GEOHEALTH_API_KEY" -H "Content-Type: application/json" \
   -d '{"addresses":["1234 Main St, Minneapolis, MN","456 Oak Ave, St Paul, MN"]}' \
-  http://localhost:8000/v1/batch
+  "$GEOHEALTH/v1/batch"
 ```
 
 ### Nearby tracts
 
 ```bash
-curl -H "X-API-Key: test" \
-  "http://localhost:8000/v1/nearby?lat=44.9778&lng=-93.265&radius=5&limit=10"
+curl -H "X-API-Key: $GEOHEALTH_API_KEY" \
+  "$GEOHEALTH/v1/nearby?lat=44.9778&lng=-93.265&radius=5&limit=10"
 ```
 
 ### Compare tracts
 
 ```bash
 # Two tracts
-curl -H "X-API-Key: test" \
-  "http://localhost:8000/v1/compare?geoid1=27053026200&geoid2=27053026300"
+curl -H "X-API-Key: $GEOHEALTH_API_KEY" \
+  "$GEOHEALTH/v1/compare?geoid1=27053026200&geoid2=27053026300"
 
 # Tract vs. state average
-curl -H "X-API-Key: test" \
-  "http://localhost:8000/v1/compare?geoid1=27053026200&compare_to=state"
+curl -H "X-API-Key: $GEOHEALTH_API_KEY" \
+  "$GEOHEALTH/v1/compare?geoid1=27053026200&compare_to=state"
+```
+
+### Historical trends
+
+```bash
+curl -H "X-API-Key: $GEOHEALTH_API_KEY" "$GEOHEALTH/v1/trends?geoid=27053026200"
 ```
 
 ### Statistics
 
 ```bash
-curl -H "X-API-Key: test" "http://localhost:8000/v1/stats"
+curl -H "X-API-Key: $GEOHEALTH_API_KEY" "$GEOHEALTH/v1/stats"
 ```
 
 ## Python SDK
@@ -145,7 +200,9 @@ The project includes a typed Python SDK that wraps every endpoint with both asyn
 ```python
 from geohealth.sdk import AsyncGeoHealthClient
 
-async with AsyncGeoHealthClient("http://localhost:8000", api_key="your-key") as client:
+BASE = "https://geohealth-api-production.up.railway.app"
+
+async with AsyncGeoHealthClient(BASE, api_key="your-key") as client:
     result = await client.context(address="1234 Main St, Minneapolis, MN 55401")
     print(result.tract.geoid, result.tract.poverty_rate)
 
@@ -159,7 +216,7 @@ async with AsyncGeoHealthClient("http://localhost:8000", api_key="your-key") as 
 ```python
 from geohealth.sdk import GeoHealthClient
 
-with GeoHealthClient("http://localhost:8000", api_key="your-key") as client:
+with GeoHealthClient(BASE, api_key="your-key") as client:
     result = client.context(lat=44.9778, lng=-93.265)
     print(result.tract.geoid)
 ```
@@ -169,7 +226,7 @@ with GeoHealthClient("http://localhost:8000", api_key="your-key") as client:
 ```python
 from geohealth.sdk import AsyncGeoHealthClient, RateLimitError, AuthenticationError
 
-async with AsyncGeoHealthClient("http://localhost:8000", api_key="your-key") as client:
+async with AsyncGeoHealthClient(BASE, api_key="your-key") as client:
     try:
         result = await client.context(address="123 Main St")
     except RateLimitError as exc:
@@ -212,10 +269,12 @@ Add to your `claude_desktop_config.json`:
 
 | Tool | Description |
 |------|-------------|
-| `lookup_health_context` | Primary lookup — address/coords to tract demographics, SVI, PLACES |
+| `lookup_health_context` | Primary lookup — address/coords to tract demographics, SVI, PLACES, EPA |
 | `batch_health_lookup` | Multi-address lookup (up to 50) |
 | `find_nearby_tracts` | Spatial radius search |
 | `compare_tracts` | Compare tracts or tract vs averages |
+| `get_tract_trends` | Multi-year ACS trend data for a tract |
+| `compare_demographics` | Tract vs county/state/national with percentile rankings |
 | `get_data_dictionary` | Field definitions with clinical interpretation |
 | `get_tract_statistics` | Data coverage by state |
 
