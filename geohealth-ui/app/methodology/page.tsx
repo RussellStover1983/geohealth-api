@@ -126,7 +126,7 @@ export default function MethodologyPage() {
           <Separator orientation="vertical" className="h-6" />
           <h1 className="text-sm font-semibold text-stone-900">Data Sources &amp; Methodology</h1>
           <div className="ml-auto">
-            <Link href="/">
+            <Link href="/explore">
               <Button variant="ghost" size="sm" className="gap-1.5 text-xs">
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Back to Explorer

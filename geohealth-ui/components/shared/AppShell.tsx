@@ -28,7 +28,9 @@ export function AppShell() {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
       {/* Topbar */}
       <header className="flex h-14 shrink-0 items-center gap-4 border-b border-stone-200 bg-white px-4">
-        <Logo />
+        <Link href="/" aria-label="GeoHealth home" className="rounded-md transition-opacity hover:opacity-80">
+          <Logo />
+        </Link>
         <div className="mx-auto w-full max-w-lg">
           <SearchPanel />
         </div>

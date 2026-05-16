@@ -10,9 +10,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "GeoHealth SDOH Explorer",
+  title: {
+    default: "GeoHealth — Census-tract health intelligence for healthcare",
+    template: "%s · GeoHealth",
+  },
   description:
-    "Census-tract-level geographic health intelligence. Explore social determinants of health, CDC PLACES measures, EPA environmental data, and more.",
+    "Type an address. Get the social determinants of health, chronic-disease prevalence, environmental exposures, and provider supply for the surrounding census tract — sourced from Census, CDC, EPA, and HRSA. Open data, MIT licensed.",
   keywords: [
     "SDOH",
     "social determinants of health",
@@ -21,7 +24,18 @@ export const metadata: Metadata = {
     "CDC PLACES",
     "SVI",
     "EPA EJScreen",
+    "HRSA HPSA",
+    "NPPES",
+    "direct primary care",
+    "DPC market fit",
   ],
+  openGraph: {
+    title: "GeoHealth — Census-tract health intelligence for healthcare",
+    description:
+      "Census-tract-level demographics, SVI, CDC PLACES, EPA EJScreen, and provider supply — sourced from federal data, served via API, map, and Python SDK.",
+    type: "website",
+    url: "https://geohealth-api.vercel.app",
+  },
 };
 
 export default function RootLayout({
