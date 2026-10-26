@@ -21,12 +21,14 @@ def _get_sync_url() -> str:
 
     Prefers database_url_sync if it looks valid (starts with postgresql://).
     Falls back to deriving from database_url by stripping +asyncpg.
+    The driver is pinned to psycopg2 (the one in our dependencies): a bare
+    postgresql:// lets SQLAlchemy pick psycopg v3, which is not installed.
     """
     sync = settings.database_url_sync
-    if sync and sync.startswith("postgresql://"):
-        return sync
-    # Derive from the async URL (which we know works if the app boots)
-    return settings.database_url.replace("+asyncpg", "")
+    if not (sync and sync.startswith("postgresql://")):
+        # Derive from the async URL (which we know works if the app boots)
+        sync = settings.database_url.replace("+asyncpg", "")
+    return sync.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 
 def include_object(object, name, type_, reflected, compare_to):
